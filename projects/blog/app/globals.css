@@ -86,6 +86,29 @@ a {
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
   }
+
+  /* MGS Theme Variables */
+  .mgs-theme {
+    --background: 180 100% 2%;
+    --foreground: 163 100% 50%;
+    --card: 180 100% 1%;
+    --card-foreground: 163 100% 50%;
+    --popover: 180 100% 1%;
+    --popover-foreground: 163 100% 50%;
+    --primary: 163 100% 50%;
+    --primary-foreground: 180 100% 2%;
+    --secondary: 180 50% 10%;
+    --secondary-foreground: 163 100% 50%;
+    --muted: 180 50% 5%;
+    --muted-foreground: 163 50% 40%;
+    --accent: 36 100% 50%;
+    --accent-foreground: 180 100% 2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 180 50% 15%;
+    --input: 180 50% 8%;
+    --ring: 163 100% 50%;
+  }
 }
 
 
@@ -96,5 +119,177 @@ a {
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+/* MGS Tactical Grid Background */
+@layer utilities {
+  .mgs-grid {
+    background-image:
+      linear-gradient(rgba(0, 255, 159, 0.1) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 255, 159, 0.1) 1px, transparent 1px);
+    background-size: 20px 20px;
+    position: relative;
+  }
+
+  .mgs-grid::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background:
+      radial-gradient(circle at 50% 50%, transparent 2px, rgba(0, 255, 159, 0.05) 3px),
+      linear-gradient(0deg, transparent 24%, rgba(0, 255, 159, 0.05) 25%, rgba(0, 255, 159, 0.05) 26%, transparent 27%, transparent 74%, rgba(0, 255, 159, 0.05) 75%, rgba(0, 255, 159, 0.05) 76%, transparent 77%, transparent);
+    background-size: 40px 40px;
+    pointer-events: none;
+  }
+
+  /* MGS Corner Brackets */
+  .mgs-brackets {
+    position: relative;
+  }
+
+  .mgs-brackets::before,
+  .mgs-brackets::after {
+    content: '';
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border: 2px solid #00ff9f;
+  }
+
+  .mgs-brackets::before {
+    top: 0;
+    left: 0;
+    border-right: none;
+    border-bottom: none;
+  }
+
+  .mgs-brackets::after {
+    bottom: 0;
+    right: 0;
+    border-left: none;
+    border-top: none;
+  }
+
+  /* MGS Scanline Effect */
+  .mgs-scanlines {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .mgs-scanlines::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(
+      transparent 0%,
+      rgba(0, 255, 159, 0.03) 50%,
+      transparent 100%
+    );
+    background-size: 100% 4px;
+    animation: scanline 2s linear infinite;
+    pointer-events: none;
+  }
+
+  /* MGS Terminal Text Effect */
+  .mgs-terminal {
+    font-family: 'Monaco', 'Menlo', 'Consolas', 'Courier New', monospace;
+    color: #00ff9f;
+    text-shadow: 0 0 5px rgba(0, 255, 159, 0.5);
+    letter-spacing: 0.1em;
+  }
+
+  /* MGS Glitch Text */
+  .mgs-glitch {
+    position: relative;
+    color: #00ff9f;
+    font-family: 'Monaco', monospace;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+  }
+
+  .mgs-glitch:hover {
+    animation: glitch 0.3s ease-in-out infinite alternate;
+  }
+
+  /* MGS HUD Panel */
+  .mgs-panel {
+    background: linear-gradient(135deg, rgba(0, 20, 20, 0.9) 0%, rgba(0, 10, 10, 0.95) 100%);
+    border: 1px solid rgba(0, 255, 159, 0.3);
+    box-shadow:
+      inset 0 1px 0 rgba(0, 255, 159, 0.1),
+      0 0 20px rgba(0, 255, 159, 0.1),
+      0 0 5px rgba(0, 255, 159, 0.2);
+    position: relative;
+  }
+
+  .mgs-panel::before {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    right: 2px;
+    bottom: 2px;
+    border: 1px solid rgba(0, 255, 159, 0.1);
+    pointer-events: none;
+  }
+
+  /* MGS Button States */
+  .mgs-button {
+    background: linear-gradient(135deg, rgba(0, 30, 30, 0.8) 0%, rgba(0, 20, 20, 0.9) 100%);
+    border: 1px solid rgba(0, 255, 159, 0.4);
+    color: #00ff9f;
+    font-family: 'Monaco', monospace;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    position: relative;
+    transition: all 0.2s ease;
+  }
+
+  .mgs-button:hover {
+    background: linear-gradient(135deg, rgba(0, 40, 40, 0.9) 0%, rgba(0, 30, 30, 1) 100%);
+    border-color: rgba(0, 255, 159, 0.8);
+    box-shadow: 0 0 15px rgba(0, 255, 159, 0.3);
+    text-shadow: 0 0 8px rgba(0, 255, 159, 0.8);
+  }
+
+  .mgs-button:active {
+    background: linear-gradient(135deg, rgba(255, 153, 0, 0.1) 0%, rgba(0, 30, 30, 0.9) 100%);
+    border-color: rgba(255, 153, 0, 0.6);
+    color: #ff9900;
+  }
+
+  /* MGS Data Stream */
+  .mgs-data-stream {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .mgs-data-stream::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(0, 255, 159, 0.1),
+      transparent
+    );
+    animation: data-stream 3s ease-in-out infinite;
+  }
+
+  @keyframes data-stream {
+    0% { left: -100%; }
+    50% { left: 100%; }
+    100% { left: 100%; }
   }
 }

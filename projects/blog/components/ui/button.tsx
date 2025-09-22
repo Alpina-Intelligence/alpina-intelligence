@@ -19,12 +19,17 @@ const buttonVariants = cva(
           "bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80",
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
+        mgs: "mgs-button font-mono tracking-wider text-xs uppercase relative overflow-hidden",
+        "mgs-tactical": "mgs-button mgs-brackets font-mono tracking-wider text-xs uppercase relative overflow-hidden",
+        "mgs-alert": "bg-gradient-to-r from-mgs-orange/20 to-mgs-orange/30 border border-mgs-orange/50 text-mgs-orange font-mono tracking-wider text-xs uppercase hover:bg-mgs-orange/40 hover:text-white",
       },
       size: {
         default: "h-9 px-4 py-2",
         sm: "h-8 rounded-md px-3 text-xs",
         lg: "h-10 rounded-md px-8",
         icon: "h-9 w-9",
+        mgs: "h-12 px-6 py-3 text-xs",
+        "mgs-compact": "h-8 px-4 py-2 text-xs",
       },
     },
     defaultVariants: {

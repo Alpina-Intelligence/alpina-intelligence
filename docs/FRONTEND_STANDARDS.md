@@ -326,8 +326,10 @@ stories/
 
 Follow this pattern for all component stories:
 
+**IMPORTANT:** Always use the correct Storybook import for Next.js projects:
+
 ```typescript
-import type { Meta, StoryObj } from '@storybook/react';
+import type { Meta, StoryObj } from '@storybook/nextjs-vite';
 import { Button } from './Button';
 
 const meta = {
@@ -412,6 +414,24 @@ export const Loading: Story = {
 - **File names**: `ComponentName.stories.tsx`
 - **Story exports**: Use descriptive names like `Primary`, `WithIcon`, `Loading`, `Error`
 - **Meta title**: Use hierarchical structure like `Components/Button` or `Forms/LoginForm`
+
+### Common Storybook Issues & Solutions
+
+#### Import Errors
+- **❌ Wrong**: `import type { Meta, StoryObj } from '@storybook/react';`
+- **✅ Correct**: `import type { Meta, StoryObj } from '@storybook/nextjs-vite';`
+
+Use `@storybook/nextjs-vite` for Next.js projects to ensure proper TypeScript support and framework integration.
+
+#### TypeScript Errors
+- Remove unused imports to avoid TypeScript warnings
+- Ensure all imported components are actually used in your stories
+- Use proper type imports with `import type` for type-only imports
+
+#### Component Path Issues
+- Use consistent import paths (`@/components/ui/button` vs `./button`)
+- Verify component exports match import statements
+- Check file paths match actual directory structure
 
 ## Component Organization
 
