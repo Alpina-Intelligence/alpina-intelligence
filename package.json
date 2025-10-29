@@ -1,0 +1,7 @@
+{
+  "dependencies": {},
+  "devDependencies": {
+    "@biomejs/biome": "2.2.4",
+    "shadcn": "^3.5.0"
+  }
+}
