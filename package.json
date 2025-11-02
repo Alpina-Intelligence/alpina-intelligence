@@ -3,5 +3,13 @@
   "devDependencies": {
     "@biomejs/biome": "2.2.4",
     "shadcn": "^3.5.0"
+  },
+  "scripts": {
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "lint": "biome lint .",
+    "lint:fix": "biome lint --write .",
+    "check": "biome check .",
+    "check:fix": "biome check --write ."
   }
 }

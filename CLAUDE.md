@@ -2,65 +2,151 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Repository Structure
+## Tech Stack
 
-This is a monorepo for Alpina Intelligence projects with the following directory structure:
+### Frontend Stack
 
-- `libs/` - Shared libraries and utilities
-- `packages/` - Reusable packages that can be consumed by multiple projects
-- `projects/` - Individual frontend/fullstack applications (Next.js apps)
-- `services/` - Backend service applications and APIs
+- **TypeScript** - Type-safe JavaScript
+- **Bun** - Fast JavaScript runtime and package manager
+- **React** - UI component library
+- **TanStack Start** - Full-stack React framework with built-in SSR
+- **shadcn/ui** - Accessible and customizable UI component library
 
-## Core Technology Stack
+### shadcn/ui Component Management
 
-- **Frontend**: Next.js 14+ (App Router), TypeScript, Tailwind CSS v3, Shadcn/ui
-- **Package Manager**: pnpm (required - never use npm/yarn)
-- **Forms**: React Hook Form + Zod validation
-- **State**: Zustand for global state
-- **Components**: Server Components by default, Client Components when needed
-- **Development**: Storybook for isolated component development and testing
+This project uses shadcn/ui for UI components. We have both the shadcn MCP server and CLI available.
 
-## When to Consult Specialized Documentation
+**Workflow for adding components:**
 
-### Project Initialization
-When creating new projects, setting up development environments, or configuring build tools:
-→ See [docs/PROJECT_SETUP.md](./docs/PROJECT_SETUP.md) for detailed procedures and configuration templates
+1. **Explore & Search** - Use the shadcn MCP server tools to:
+   - Search for components: `mcp__shadcn__search_items_in_registries`
+   - View component details: `mcp__shadcn__view_items_in_registries`
+   - Find usage examples: `mcp__shadcn__get_item_examples_from_registries`
+   - Get add commands: `mcp__shadcn__get_add_command_for_items`
 
-### Frontend Development Standards
-When building React components, implementing UI patterns, or working with the design system:
-→ See [docs/FRONTEND_STANDARDS.md](./docs/FRONTEND_STANDARDS.md) for component patterns, naming conventions, and style guidelines
+2. **Add Components** - Use the CLI to install:
 
-### API Development
-When creating new endpoints, implementing authentication, or structuring backend services:
-→ See [docs/BACKEND_STANDARDS.md](./docs/BACKEND_STANDARDS.md) for FastAPI patterns and service architecture *(coming soon)*
+   ```bash
+   bunx --bun shadcn@canary add <component-name>
+   ```
 
-## Essential Commands
+   Examples:
 
-```bash
-# Development
-pnpm dev                              # Start development server
-pnpm --filter project-name dev        # Run dev in specific project
-pnpm storybook                        # Start Storybook component dev server
+   ```bash
+   bunx --bun shadcn@canary add button
+   bunx --bun shadcn@canary add card dialog
+   ```
 
-# Dependencies
-pnpm add package-name                 # Add dependency
-pnpm dlx shadcn@latest add button     # Add Shadcn/ui component
+3. **Verify** - After adding components, optionally use:
+   - `mcp__shadcn__get_audit_checklist` to verify setup
+
+**Note:** The MCP server is excellent for exploration and understanding what's available, but always use the CLI (`bunx --bun shadcn@canary add`) to actually install components into the project.
+
+Default to using Bun instead of Node.js.
+
+- Use `bun <file>` instead of `node <file>` or `ts-node <file>`
+- Use `bun test` instead of `jest` or `vitest`
+- Use `bun build <file.html|file.ts|file.css>` instead of `webpack` or `esbuild`
+- Use `bun install` instead of `npm install` or `yarn install` or `pnpm install`
+- Use `bun run <script>` instead of `npm run <script>` or `yarn run <script>` or `pnpm run <script>`
+- Bun automatically loads .env, so don't use dotenv.
+
+#### APIs
+
+- `Bun.serve()` supports WebSockets, HTTPS, and routes. Don't use `express`.
+- `bun:sqlite` for SQLite. Don't use `better-sqlite3`.
+- `Bun.redis` for Redis. Don't use `ioredis`.
+- `Bun.sql` for Postgres. Don't use `pg` or `postgres.js`.
+- `WebSocket` is built-in. Don't use `ws`.
+- **File Operations**: Use `Bun.file()` and `Bun.write()` instead of `node:fs`
+  - Read: `await Bun.file(path).text()` instead of `fs.readFile(path, 'utf-8')`
+  - Write: `await Bun.write(path, content)` instead of `fs.writeFile(path, content)`
+  - No imports needed - Bun is globally available
+- `Bun.$`ls`` instead of execa for shell commands.
+
+#### Testing
+
+Use `bun test` to run tests.
+
+```ts#index.test.ts
+import { test, expect } from "bun:test";
+
+test("hello world", () => {
+  expect(1).toBe(1);
+});
 ```
 
-## Directory Placement Guidelines
+#### Frontend
 
-1. Shared utilities and libraries → `libs/` directory
-2. Reusable packages → `packages/` directory
-3. Standalone applications → `projects/` directory
-4. Service applications → `services/` directory
+Use HTML imports with `Bun.serve()`. Don't use `vite`. HTML imports fully support React, CSS, Tailwind.
 
-## Guidelines for AI Assistants
+Server:
 
-- **Always use pnpm commands** - never npm or yarn
-- **Check shared code first** - look in `libs/` and `packages/` before creating new utilities
-- **Prefer Server Components** - use Client Components only when necessary
-- **Use Shadcn/ui components** - don't build custom UI from scratch
-- **Validate forms with Zod** - define schemas for all form data
-- **Follow monorepo patterns** - each project should be self-contained
-- **Use translation keys** - all user-facing text should use next-intl
-- **Consult specialized docs** - refer to docs/ directory for detailed guidance on specific tasks
+```ts#index.ts
+import index from "./index.html"
+
+Bun.serve({
+  routes: {
+    "/": index,
+    "/api/users/:id": {
+      GET: (req) => {
+        return new Response(JSON.stringify({ id: req.params.id }));
+      },
+    },
+  },
+  // optional websocket support
+  websocket: {
+    open: (ws) => {
+      ws.send("Hello, world!");
+    },
+    message: (ws, message) => {
+      ws.send(message);
+    },
+    close: (ws) => {
+      // handle close
+    }
+  },
+  development: {
+    hmr: true,
+    console: true,
+  }
+})
+```
+
+HTML files can import .tsx, .jsx or .js files directly and Bun's bundler will transpile & bundle automatically. `<link>` tags can point to stylesheets and Bun's CSS bundler will bundle.
+
+```html#index.html
+<html>
+  <body>
+    <h1>Hello, world!</h1>
+    <script type="module" src="./frontend.tsx"></script>
+  </body>
+</html>
+```
+
+With the following `frontend.tsx`:
+
+```tsx#frontend.tsx
+import React from "react";
+
+// import .css files directly and it works
+import './index.css';
+
+import { createRoot } from "react-dom/client";
+
+const root = createRoot(document.body);
+
+export default function Frontend() {
+  return <h1>Hello, world!</h1>;
+}
+
+root.render(<Frontend />);
+```
+
+Then, run index.ts
+
+```sh
+bun --hot ./index.ts
+```
+
+For more information, read the Bun API docs in `node_modules/bun-types/docs/**.md`.
