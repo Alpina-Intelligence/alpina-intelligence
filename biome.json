@@ -6,7 +6,10 @@
     "useIgnoreFile": false
   },
   "files": {
-    "ignoreUnknown": false
+    "ignoreUnknown": false,
+    "ignore": [
+      "**/app/styles/app.css"
+    ]
   },
   "formatter": {
     "enabled": true,

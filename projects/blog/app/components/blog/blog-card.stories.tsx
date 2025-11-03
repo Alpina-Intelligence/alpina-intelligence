@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react'
+import { expect, within } from '@storybook/test'
 import { BlogCard, BlogCardSkeleton } from './blog-card'
 import { mockBlogPosts } from '@/lib/mock-data'
 
@@ -14,9 +15,37 @@ const meta = {
 export default meta
 type Story = StoryObj<typeof meta>
 
+/**
+ * Default blog card with all elements visible
+ */
 export const Default: Story = {
   args: {
     post: mockBlogPosts[0],
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+
+    // Verify title is rendered
+    const title = canvas.getByText(args.post.title)
+    await expect(title).toBeInTheDocument()
+
+    // Verify author name is present
+    const author = canvas.getByText(args.post.author.name)
+    await expect(author).toBeInTheDocument()
+
+    // Verify at least one tag is rendered
+    const firstTag = canvas.getByText(args.post.tags[0].name)
+    await expect(firstTag).toBeInTheDocument()
+
+    // Verify link has correct href
+    const link = canvas.getByRole('link')
+    await expect(link).toHaveAttribute('href', `/blog/${args.post.slug}`)
+
+    // Verify excerpt is shown (not compact variant)
+    if (args.post.excerpt) {
+      const excerpt = canvas.getByText(args.post.excerpt)
+      await expect(excerpt).toBeInTheDocument()
+    }
   },
 }
 
@@ -35,10 +64,27 @@ export const WithoutImage: Story = {
   },
 }
 
+/**
+ * Compact variant with reduced spacing and no excerpt
+ */
 export const Compact: Story = {
   args: {
     post: mockBlogPosts[1],
     variant: 'compact',
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+
+    // Verify title is present
+    await expect(canvas.getByText(args.post.title)).toBeInTheDocument()
+
+    // Verify excerpt is NOT shown in compact mode
+    const excerptElement = canvasElement.querySelector('p.text-muted-foreground.line-clamp-2')
+    await expect(excerptElement).not.toBeInTheDocument()
+
+    // Verify tags are limited (should show max 2 tags in compact mode)
+    const tagElements = canvasElement.querySelectorAll('[class*="badge"]')
+    await expect(tagElements.length).toBeLessThanOrEqual(2)
   },
 }
 
@@ -62,8 +108,16 @@ export const LongTitle: Story = {
   },
 }
 
+/**
+ * Loading state with skeleton placeholders
+ */
 export const Loading: Story = {
   render: () => <BlogCardSkeleton />,
+  play: async ({ canvasElement }) => {
+    // Verify skeleton elements are present
+    const skeletons = canvasElement.querySelectorAll('[class*="animate-pulse"]')
+    await expect(skeletons.length).toBeGreaterThan(0)
+  },
 }
 
 export const LoadingCompact: Story = {
