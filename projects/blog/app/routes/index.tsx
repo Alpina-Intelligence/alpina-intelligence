@@ -1,21 +1,42 @@
-'use client'
-
-import { useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
+import {
+  AlertCircle,
+  CheckCircle2,
+  Info,
+  Terminal as TerminalIcon,
+} from 'lucide-react'
+import { useId, useState } from 'react'
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Line,
+  LineChart,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import { ThemeSwitcher } from '@/components/theme-switcher'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+} from '@/components/ui/chart'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
 import { Switch } from '@/components/ui/switch'
-import { Bar, BarChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts'
-import { AlertCircle, CheckCircle2, Info, Terminal as TerminalIcon } from 'lucide-react'
 
 export const Route = createFileRoute('/')({
   component: Home,
@@ -44,6 +65,14 @@ const chartConfig = {
 function Home() {
   const [date, setDate] = useState<Date | undefined>(new Date())
   const [progress, setProgress] = useState(60)
+
+  // Generate unique IDs for form fields
+  const emailId = useId()
+  const passwordId = useId()
+  const termsId = useId()
+  const notificationsId = useId()
+  const marketingId = useId()
+  const darkModeId = useId()
 
   return (
     <div className="min-h-screen bg-background p-8">
@@ -88,16 +117,16 @@ function Home() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" placeholder="name@example.com" />
+                <Label htmlFor={emailId}>Email</Label>
+                <Input id={emailId} type="email" placeholder="name@example.com" />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <Input id="password" type="password" placeholder="••••••••" />
+                <Label htmlFor={passwordId}>Password</Label>
+                <Input id={passwordId} type="password" placeholder="••••••••" />
               </div>
               <div className="flex items-center space-x-2">
-                <Checkbox id="terms" />
-                <Label htmlFor="terms" className="text-sm font-normal">
+                <Checkbox id={termsId} />
+                <Label htmlFor={termsId} className="text-sm font-normal">
                   I agree to the terms and conditions
                 </Label>
               </div>
@@ -142,10 +171,16 @@ function Home() {
               <CardContent className="space-y-4">
                 <Progress value={progress} />
                 <div className="flex gap-2">
-                  <Button size="sm" onClick={() => setProgress(Math.max(0, progress - 10))}>
+                  <Button
+                    size="sm"
+                    onClick={() => setProgress(Math.max(0, progress - 10))}
+                  >
                     Decrease
                   </Button>
-                  <Button size="sm" onClick={() => setProgress(Math.min(100, progress + 10))}>
+                  <Button
+                    size="sm"
+                    onClick={() => setProgress(Math.min(100, progress + 10))}
+                  >
                     Increase
                   </Button>
                 </div>
@@ -159,16 +194,16 @@ function Home() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="notifications">Enable notifications</Label>
-                  <Switch id="notifications" />
+                  <Label htmlFor={notificationsId}>Enable notifications</Label>
+                  <Switch id={notificationsId} />
                 </div>
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="marketing">Marketing emails</Label>
-                  <Switch id="marketing" />
+                  <Label htmlFor={marketingId}>Marketing emails</Label>
+                  <Switch id={marketingId} />
                 </div>
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="dark-mode">Dark mode</Label>
-                  <Switch id="dark-mode" />
+                  <Label htmlFor={darkModeId}>Dark mode</Label>
+                  <Switch id={darkModeId} />
                 </div>
               </CardContent>
             </Card>
@@ -208,11 +243,21 @@ function Home() {
               <CardContent>
                 <ChartContainer config={chartConfig} className="h-[300px]">
                   <BarChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                    <XAxis dataKey="month" className="text-xs fill-muted-foreground" />
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      className="stroke-muted"
+                    />
+                    <XAxis
+                      dataKey="month"
+                      className="text-xs fill-muted-foreground"
+                    />
                     <YAxis className="text-xs fill-muted-foreground" />
                     <ChartTooltip content={<ChartTooltipContent />} />
-                    <Bar dataKey="value" fill="var(--color-value)" radius={[4, 4, 0, 0]} />
+                    <Bar
+                      dataKey="value"
+                      fill="var(--color-value)"
+                      radius={[4, 4, 0, 0]}
+                    />
                   </BarChart>
                 </ChartContainer>
               </CardContent>
@@ -226,11 +271,22 @@ function Home() {
               <CardContent>
                 <ChartContainer config={chartConfig} className="h-[300px]">
                   <LineChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                    <XAxis dataKey="month" className="text-xs fill-muted-foreground" />
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      className="stroke-muted"
+                    />
+                    <XAxis
+                      dataKey="month"
+                      className="text-xs fill-muted-foreground"
+                    />
                     <YAxis className="text-xs fill-muted-foreground" />
                     <ChartTooltip content={<ChartTooltipContent />} />
-                    <Line type="monotone" dataKey="revenue" stroke="var(--color-revenue)" strokeWidth={2} />
+                    <Line
+                      type="monotone"
+                      dataKey="revenue"
+                      stroke="var(--color-revenue)"
+                      strokeWidth={2}
+                    />
                   </LineChart>
                 </ChartContainer>
               </CardContent>

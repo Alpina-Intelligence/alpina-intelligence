@@ -42,6 +42,56 @@ This project uses shadcn/ui for UI components. We have both the shadcn MCP serve
 
 **Note:** The MCP server is excellent for exploration and understanding what's available, but always use the CLI (`bunx --bun shadcn@canary add`) to actually install components into the project.
 
+### TanStack Start Best Practices
+
+#### React Server Components
+
+**TanStack Start does NOT currently support React Server Components.** The `'use client'` and `'use server'` directives should **not** be used in this project. All components are client components by default.
+
+- ❌ Don't use `'use client'` directive
+- ❌ Don't use `'use server'` directive
+
+These directives are Next.js App Router features and have no effect in TanStack Start until RSC support is added.
+
+#### Form Field IDs
+
+Always use React's `useId()` hook for form field IDs instead of static strings. This ensures:
+
+- SSR hydration safety
+- Component reusability
+- No duplicate ID conflicts
+
+**Bad:**
+
+```tsx
+function MyForm() {
+  return (
+    <>
+      <Label htmlFor="email">Email</Label>
+      <Input id="email" type="email" />
+    </>
+  )
+}
+```
+
+**Good:**
+
+```tsx
+import { useId } from 'react'
+
+function MyForm() {
+  const emailId = useId()
+  return (
+    <>
+      <Label htmlFor={emailId}>Email</Label>
+      <Input id={emailId} type="email" />
+    </>
+  )
+}
+```
+
+### Bun Runtime
+
 Default to using Bun instead of Node.js.
 
 - Use `bun <file>` instead of `node <file>` or `ts-node <file>`
