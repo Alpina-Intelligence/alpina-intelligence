@@ -5,6 +5,7 @@
   "editor.codeActionsOnSave": {
     "source.organizeImports.biome": "explicit"
   },
+  "css.validate": false,
   "[typescript]": {
     "editor.defaultFormatter": "biomejs.biome"
   },
