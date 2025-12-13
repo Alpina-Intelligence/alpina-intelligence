@@ -211,3 +211,6 @@ __marimo__/
 routeTree.gen.ts
 
 node_modules/
+
+# scratch files
+projects/ai-learning/

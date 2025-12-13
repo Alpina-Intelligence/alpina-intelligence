@@ -1,8 +1,11 @@
 {
+  "name": "alpina-intelligence",
+  "private": true,
+  "workspaces": ["projects/*", "packages/*"],
   "dependencies": {},
   "devDependencies": {
     "@biomejs/biome": "2.2.4",
-    "shadcn": "^3.5.0"
+    "typescript": "^5.9.3"
   },
   "scripts": {
     "format": "biome format --write .",
