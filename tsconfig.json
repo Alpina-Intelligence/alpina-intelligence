@@ -1,0 +1,8 @@
+{
+  "files": [],
+  "references": [
+    { "path": "projects/blog" },
+    { "path": "packages/themes" },
+    { "path": "projects/puck-prophet" }
+  ]
+}

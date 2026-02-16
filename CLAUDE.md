@@ -1,29 +1,44 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code when working in this repository.
 
-## Repository Structure
+## Tech Stack
 
-This is a monorepo for Alpina Intelligence projects with the following directory structure:
+- **TanStack Start** - Full-stack React framework with SSR
+- **Bun** - Runtime and package manager
+- **shadcn/ui** - UI components
+- **Tailwind CSS v4** - Styling
+- **Drizzle ORM** - Database (PostgreSQL)
+- **Biome** - Linting and formatting
 
-- `libs/` - Shared libraries
-- `packages/` - Reusable packages
-- `projects/` - Individual projects
-- `services/` - Service applications
+## Bun Over Node
 
-## Project Setup
+Always use Bun commands and APIs:
 
-This appears to be a newly initialized monorepo. When adding new projects or services:
+```bash
+bun install          # not npm/yarn/pnpm
+bun run <script>     # not npm run
+bun test             # not jest/vitest CLI
+bun <file.ts>        # not node/ts-node
+```
 
-1. Place shared utilities and libraries in the `libs/` directory
-2. Place reusable packages in the `packages/` directory
-3. Place standalone projects in the `projects/` directory
-4. Place service applications in the `services/` directory
+Prefer Bun built-in APIs:
+- `Bun.file()` / `Bun.write()` instead of `node:fs`
+- `Bun.serve()` for servers (supports WebSocket, HTTPS)
+- `Bun.$\`cmd\`` instead of execa for shell commands
+- Bun auto-loads `.env` - no dotenv needed
 
-## Development Guidelines
+## shadcn/ui Components
 
-Since this is a monorepo, consider the following when developing:
+1. **Search/explore** with MCP tools (`mcp__shadcn__search_items_in_registries`, etc.)
+2. **Install** with CLI: `bunx --bun shadcn@canary add <component>`
 
-- When creating new components, check if similar functionality exists in the shared `libs/` or `packages/` directories first
-- Follow consistent naming conventions across the monorepo
-- Each project/service should be self-contained with its own dependencies and build configuration
+## TanStack Start Notes
+
+- No React Server Components support yet
+- Don't use `'use client'` or `'use server'` directives
+- Use `useId()` hook for form field IDs (SSR hydration safety)
+
+## Monorepo Structure
+
+Projects live in `projects/` and `packages/`. Root provides shared TypeScript and Biome config.
