@@ -214,3 +214,6 @@ node_modules/
 
 # scratch files
 projects/ai-learning/
+
+# docs specific to my deployment
+docs/_private/

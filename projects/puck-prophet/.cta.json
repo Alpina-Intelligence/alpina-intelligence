@@ -1,0 +1,22 @@
+{
+  "projectName": "puck-prophet",
+  "mode": "file-router",
+  "typescript": true,
+  "tailwind": true,
+  "packageManager": "bun",
+  "git": false,
+  "addOnOptions": {
+    "drizzle": {
+      "database": "postgresql"
+    }
+  },
+  "version": 1,
+  "framework": "react-cra",
+  "chosenAddOns": [
+    "start",
+    "shadcn",
+    "drizzle",
+    "biome",
+    "nitro"
+  ]
+}
