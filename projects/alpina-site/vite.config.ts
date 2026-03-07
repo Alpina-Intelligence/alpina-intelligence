@@ -26,7 +26,17 @@ const config = defineConfig({
     projects: ["./tsconfig.json"]
   }), tailwindcss(), tanstackStart(), viteReact()],
   test: {
-    workspace: [{
+    workspace: [
+      {
+        extends: true,
+        test: {
+          name: 'unit',
+          include: ['src/**/*.test.ts'],
+          exclude: ['src/**/*.stories.*'],
+          environment: 'node',
+        },
+      },
+      {
       extends: true,
       plugins: [
       // The plugin will run tests for the stories defined in your Storybook config

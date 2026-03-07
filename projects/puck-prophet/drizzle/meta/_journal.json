@@ -1,0 +1,20 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1772341510986,
+      "tag": "0000_complete_rhino",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1772908126297,
+      "tag": "0001_useful_thanos",
+      "breakpoints": true
+    }
+  ]
+}

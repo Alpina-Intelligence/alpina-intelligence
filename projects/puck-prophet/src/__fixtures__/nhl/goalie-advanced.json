@@ -1,0 +1,29 @@
+{
+  "data": [
+    {
+      "completeGamePct": 0.97,
+      "completeGames": 32,
+      "gamesPlayed": 36,
+      "gamesStarted": 33,
+      "goalieFullName": "Stuart Skinner",
+      "goalsAgainst": 111,
+      "goalsAgainstAverage": 3.17,
+      "goalsFor": 91,
+      "goalsForAverage": 2.6,
+      "incompleteGames": 1,
+      "lastName": "Skinner",
+      "playerId": 8480038,
+      "qualityStart": 15,
+      "qualityStartsPct": 0.45,
+      "regulationLosses": 23,
+      "regulationWins": 9,
+      "savePct": 0.898,
+      "seasonId": 20242025,
+      "shootsCatches": "L",
+      "shotsAgainstPer60": 31.1,
+      "teamAbbrevs": "EDM",
+      "timeOnIce": 125790
+    }
+  ],
+  "total": 1
+}
