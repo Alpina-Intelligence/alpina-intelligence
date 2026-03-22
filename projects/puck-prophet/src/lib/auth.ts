@@ -13,7 +13,7 @@ export const auth = betterAuth({
 	},
 	plugins: [
 		anonymous({
-			onLinkAccount: async ({ anonymousUser, newUser }) => {
+			onLinkAccount: async ({ anonymousUser: _anonymousUser, newUser: _newUser }) => {
 				// TODO: migrate anonymous user's data (leagues, teams, picks) to the new account
 			},
 		}),

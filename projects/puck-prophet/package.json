@@ -17,7 +17,8 @@
     "check": "biome check",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
-    "sync": "bun src/sync/index.ts"
+    "sync": "bun src/sync/index.ts",
+    "backfill": "bun src/sync/backfill.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

@@ -1,142 +1,141 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { nhlTeams, nhlPlayers, nhlSyncLog } from "@/db/nhl-schema";
-import { createMockCtx } from "./helpers/mock-ctx";
-import rosterFixture from "@/__fixtures__/nhl/roster-edm.json";
-import type { NhlRosterResponse } from "@/lib/nhl-api/types";
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import rosterFixture from '@/__fixtures__/nhl/roster-edm.json'
+import { nhlPlayers, nhlSyncLog, nhlTeams } from '@/db/nhl-schema'
+import type { NhlRosterResponse } from '@/lib/nhl-api/types'
+import { createMockCtx } from './helpers/mock-ctx'
 
-vi.mock("@/lib/nhl-api", () => ({
-	nhlFetch: vi.fn(),
-	endpoints: {
-		roster: {
-			current: vi
-				.fn()
-				.mockImplementation(
-					(abbrev: string) => `https://mock/roster/${abbrev}/current`,
-				),
-		},
-	},
-}));
+vi.mock('@/lib/nhl-api', () => ({
+  nhlFetch: vi.fn(),
+  endpoints: {
+    roster: {
+      current: vi
+        .fn()
+        .mockImplementation(
+          (abbrev: string) => `https://mock/roster/${abbrev}/current`,
+        ),
+    },
+  },
+}))
 
-import { nhlFetch } from "@/lib/nhl-api";
-const mockNhlFetch = vi.mocked(nhlFetch);
+import { nhlFetch } from '@/lib/nhl-api'
 
-const edmRoster = rosterFixture as unknown as NhlRosterResponse;
-const emptyRoster = { forwards: [], defensemen: [], goalies: [] };
+const mockNhlFetch = vi.mocked(nhlFetch)
 
-describe("rosters task integration", () => {
-	beforeEach(() => {
-		vi.clearAllMocks();
-	});
+const edmRoster = rosterFixture as unknown as NhlRosterResponse
+const emptyRoster = { forwards: [], defensemen: [], goalies: [] }
 
-	it("fetches roster for all 32 teams", async () => {
-		const { rostersTask } = await import("../rosters");
-		mockNhlFetch.mockResolvedValue({ data: emptyRoster, raw: "{}" });
-		const { ctx } = createMockCtx();
+describe('rosters task integration', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
-		await rostersTask.run(ctx);
+  it('fetches roster for all 32 teams', async () => {
+    const { rostersTask } = await import('../rosters')
+    mockNhlFetch.mockResolvedValue({ data: emptyRoster, raw: '{}' })
+    const { ctx } = createMockCtx()
 
-		expect(mockNhlFetch).toHaveBeenCalledTimes(32);
-	});
+    await rostersTask.run(ctx)
 
-	it("upserts players with correct teamId when team exists in DB", async () => {
-		const { rostersTask } = await import("../rosters");
-		mockNhlFetch.mockImplementation(async (url) => {
-			if (typeof url === "string" && url.includes("/EDM/")) {
-				return { data: edmRoster, raw: JSON.stringify(edmRoster) };
-			}
-			return { data: emptyRoster, raw: "{}" };
-		});
+    expect(mockNhlFetch).toHaveBeenCalledTimes(32)
+  })
 
-		const { ctx, insertsFor } = createMockCtx({
-			selectData: new Map([
-				[nhlTeams, [{ id: 22, abbrev: "EDM", name: "Oilers" }]],
-			]),
-		});
+  it('upserts players with correct teamId when team exists in DB', async () => {
+    const { rostersTask } = await import('../rosters')
+    mockNhlFetch.mockImplementation(async (url) => {
+      if (typeof url === 'string' && url.includes('/EDM/')) {
+        return { data: edmRoster, raw: JSON.stringify(edmRoster) }
+      }
+      return { data: emptyRoster, raw: '{}' }
+    })
 
-		await rostersTask.run(ctx);
+    const { ctx, insertsFor } = createMockCtx({
+      selectData: new Map([
+        [nhlTeams, [{ id: 22, abbrev: 'EDM', name: 'Oilers' }]],
+      ]),
+    })
 
-		const playerInserts = insertsFor(nhlPlayers);
-		const allEdmPlayers = [
-			...edmRoster.forwards,
-			...edmRoster.defensemen,
-			...edmRoster.goalies,
-		];
-		expect(playerInserts).toHaveLength(allEdmPlayers.length);
-		expect(playerInserts[0].values).toHaveProperty("teamId", 22);
-		expect(playerInserts[0].values).toHaveProperty("teamAbbrev", "EDM");
-	});
+    await rostersTask.run(ctx)
 
-	it("skips teams not in DB with console.warn", async () => {
-		const { rostersTask } = await import("../rosters");
-		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const playerInserts = insertsFor(nhlPlayers)
+    const allEdmPlayers = [
+      ...edmRoster.forwards,
+      ...edmRoster.defensemen,
+      ...edmRoster.goalies,
+    ]
+    expect(playerInserts).toHaveLength(allEdmPlayers.length)
+    expect(playerInserts[0].values).toHaveProperty('teamId', 22)
+    expect(playerInserts[0].values).toHaveProperty('teamAbbrev', 'EDM')
+  })
 
-		mockNhlFetch.mockResolvedValue({ data: edmRoster, raw: "{}" });
-		const { ctx, insertsFor } = createMockCtx({
-			selectData: new Map([[nhlTeams, []]]),
-		});
+  it('skips teams not in DB with console.warn', async () => {
+    const { rostersTask } = await import('../rosters')
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
-		await rostersTask.run(ctx);
+    mockNhlFetch.mockResolvedValue({ data: edmRoster, raw: '{}' })
+    const { ctx, insertsFor } = createMockCtx({
+      selectData: new Map([[nhlTeams, []]]),
+    })
 
-		expect(insertsFor(nhlPlayers)).toHaveLength(0);
-		expect(warnSpy).toHaveBeenCalled();
-		warnSpy.mockRestore();
-	});
+    await rostersTask.run(ctx)
 
-	it("continues after per-team fetch errors", async () => {
-		const { rostersTask } = await import("../rosters");
-		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(insertsFor(nhlPlayers)).toHaveLength(0)
+    expect(warnSpy).toHaveBeenCalled()
+    warnSpy.mockRestore()
+  })
 
-		let callCount = 0;
-		mockNhlFetch.mockImplementation(async () => {
-			callCount++;
-			if (callCount === 1) throw new Error("Network timeout");
-			return { data: emptyRoster, raw: "{}" };
-		});
-		const { ctx } = createMockCtx();
+  it('continues after per-team fetch errors', async () => {
+    const { rostersTask } = await import('../rosters')
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
-		// Should not throw despite first team failing
-		await expect(rostersTask.run(ctx)).resolves.not.toThrow();
-		expect(mockNhlFetch).toHaveBeenCalledTimes(32);
-		expect(errorSpy).toHaveBeenCalled();
-		errorSpy.mockRestore();
-	});
+    let callCount = 0
+    mockNhlFetch.mockImplementation(async () => {
+      callCount++
+      if (callCount === 1) throw new Error('Network timeout')
+      return { data: emptyRoster, raw: '{}' }
+    })
+    const { ctx } = createMockCtx()
 
-	it("returns total upserted player count", async () => {
-		const { rostersTask } = await import("../rosters");
-		mockNhlFetch.mockImplementation(async (url) => {
-			if (typeof url === "string" && url.includes("/EDM/")) {
-				return { data: edmRoster, raw: "{}" };
-			}
-			return { data: emptyRoster, raw: "{}" };
-		});
+    // Should not throw despite first team failing
+    await expect(rostersTask.run(ctx)).resolves.not.toThrow()
+    expect(mockNhlFetch).toHaveBeenCalledTimes(32)
+    expect(errorSpy).toHaveBeenCalled()
+    errorSpy.mockRestore()
+  })
 
-		const { ctx } = createMockCtx({
-			selectData: new Map([
-				[nhlTeams, [{ id: 22, abbrev: "EDM" }]],
-			]),
-		});
+  it('returns total upserted player count', async () => {
+    const { rostersTask } = await import('../rosters')
+    mockNhlFetch.mockImplementation(async (url) => {
+      if (typeof url === 'string' && url.includes('/EDM/')) {
+        return { data: edmRoster, raw: '{}' }
+      }
+      return { data: emptyRoster, raw: '{}' }
+    })
 
-		const result = await rostersTask.run(ctx);
+    const { ctx } = createMockCtx({
+      selectData: new Map([[nhlTeams, [{ id: 22, abbrev: 'EDM' }]]]),
+    })
 
-		const expected =
-			edmRoster.forwards.length +
-			edmRoster.defensemen.length +
-			edmRoster.goalies.length;
-		expect(result).toBe(expected);
-	});
+    const result = await rostersTask.run(ctx)
 
-	it("writes sync log on completion", async () => {
-		const { rostersTask } = await import("../rosters");
-		mockNhlFetch.mockResolvedValue({ data: emptyRoster, raw: "{}" });
-		const { ctx, insertsFor } = createMockCtx();
+    const expected =
+      edmRoster.forwards.length +
+      edmRoster.defensemen.length +
+      edmRoster.goalies.length
+    expect(result).toBe(expected)
+  })
 
-		await rostersTask.run(ctx);
+  it('writes sync log on completion', async () => {
+    const { rostersTask } = await import('../rosters')
+    mockNhlFetch.mockResolvedValue({ data: emptyRoster, raw: '{}' })
+    const { ctx, insertsFor } = createMockCtx()
 
-		const logInserts = insertsFor(nhlSyncLog);
-		expect(logInserts).toHaveLength(1);
-		expect(logInserts[0].values).toMatchObject({
-			taskName: "rosters",
-			status: "success",
-		});
-	});
-});
+    await rostersTask.run(ctx)
+
+    const logInserts = insertsFor(nhlSyncLog)
+    expect(logInserts).toHaveLength(1)
+    expect(logInserts[0].values).toMatchObject({
+      taskName: 'rosters',
+      status: 'success',
+    })
+  })
+})

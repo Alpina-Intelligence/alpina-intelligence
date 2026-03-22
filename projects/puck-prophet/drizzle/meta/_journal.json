@@ -15,6 +15,13 @@
       "when": 1772908126297,
       "tag": "0001_useful_thanos",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1774122716871,
+      "tag": "0002_strong_ultimatum",
+      "breakpoints": true
     }
   ]
 }

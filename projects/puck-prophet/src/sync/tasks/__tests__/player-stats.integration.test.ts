@@ -1,205 +1,198 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import mcdavidFixture from '@/__fixtures__/nhl/player-mcdavid.json'
+import skinnerFixture from '@/__fixtures__/nhl/player-skinner.json'
 import {
-	nhlPlayers,
-	nhlSkaterSeasonStats,
-	nhlGoalieSeasonStats,
-	nhlSyncLog,
-} from "@/db/nhl-schema";
-import { nhlSeasonTotals } from "@/lib/nhl-api/transformers";
-import { createMockCtx } from "./helpers/mock-ctx";
-import mcdavidFixture from "@/__fixtures__/nhl/player-mcdavid.json";
-import skinnerFixture from "@/__fixtures__/nhl/player-skinner.json";
-import type { NhlPlayerLandingResponse } from "@/lib/nhl-api/types";
+  nhlGoalieSeasonStats,
+  nhlPlayers,
+  nhlSkaterSeasonStats,
+  nhlSyncLog,
+} from '@/db/nhl-schema'
+import { nhlSeasonTotals } from '@/lib/nhl-api/transformers'
+import type { NhlPlayerLandingResponse } from '@/lib/nhl-api/types'
+import { createMockCtx } from './helpers/mock-ctx'
 
-vi.mock("@/lib/nhl-api", () => ({
-	nhlFetch: vi.fn(),
-	endpoints: {
-		player: {
-			landing: vi
-				.fn()
-				.mockImplementation(
-					(id: number) => `https://mock/player/${id}/landing`,
-				),
-		},
-	},
-}));
+vi.mock('@/lib/nhl-api', () => ({
+  nhlFetch: vi.fn(),
+  endpoints: {
+    player: {
+      landing: vi
+        .fn()
+        .mockImplementation(
+          (id: number) => `https://mock/player/${id}/landing`,
+        ),
+    },
+  },
+}))
 
-import { nhlFetch } from "@/lib/nhl-api";
-const mockNhlFetch = vi.mocked(nhlFetch);
+import { nhlFetch } from '@/lib/nhl-api'
 
-const mcdavid = mcdavidFixture as unknown as NhlPlayerLandingResponse;
-const skinner = skinnerFixture as unknown as NhlPlayerLandingResponse;
+const mockNhlFetch = vi.mocked(nhlFetch)
 
-describe("player-stats task integration", () => {
-	beforeEach(() => {
-		vi.clearAllMocks();
-	});
+const mcdavid = mcdavidFixture as unknown as NhlPlayerLandingResponse
+const skinner = skinnerFixture as unknown as NhlPlayerLandingResponse
 
-	it("returns 0 and writes 'skipped' log when no active players", async () => {
-		const { playerStatsTask } = await import("../player-stats");
-		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+describe('player-stats task integration', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
-		const { ctx, insertsFor } = createMockCtx({
-			selectData: new Map([[nhlPlayers, []]]),
-		});
+  it("returns 0 and writes 'skipped' log when no active players", async () => {
+    const { playerStatsTask } = await import('../player-stats')
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
-		const result = await playerStatsTask.run(ctx);
+    const { ctx, insertsFor } = createMockCtx({
+      selectData: new Map([[nhlPlayers, []]]),
+    })
 
-		expect(result).toBe(0);
-		const logInserts = insertsFor(nhlSyncLog);
-		expect(logInserts).toHaveLength(1);
-		expect(logInserts[0].values).toMatchObject({
-			taskName: "player-stats",
-			status: "skipped",
-			recordsUpserted: 0,
-		});
-		warnSpy.mockRestore();
-	});
+    const result = await playerStatsTask.run(ctx)
 
-	it("routes skater stats to nhlSkaterSeasonStats", async () => {
-		const { playerStatsTask } = await import("../player-stats");
-		mockNhlFetch.mockResolvedValue({
-			data: mcdavid,
-			raw: JSON.stringify(mcdavid),
-		});
+    expect(result).toBe(0)
+    const logInserts = insertsFor(nhlSyncLog)
+    expect(logInserts).toHaveLength(1)
+    expect(logInserts[0].values).toMatchObject({
+      taskName: 'player-stats',
+      status: 'skipped',
+      recordsUpserted: 0,
+    })
+    warnSpy.mockRestore()
+  })
 
-		const { ctx, insertsFor } = createMockCtx({
-			selectData: new Map([
-				[nhlPlayers, [{ id: mcdavid.playerId, position: "C" }]],
-			]),
-		});
+  it('routes skater stats to nhlSkaterSeasonStats', async () => {
+    const { playerStatsTask } = await import('../player-stats')
+    mockNhlFetch.mockResolvedValue({
+      data: mcdavid,
+      raw: JSON.stringify(mcdavid),
+    })
 
-		await playerStatsTask.run(ctx);
+    const { ctx, insertsFor } = createMockCtx({
+      selectData: new Map([
+        [nhlPlayers, [{ id: mcdavid.playerId, position: 'C' }]],
+      ]),
+    })
 
-		const skaterInserts = insertsFor(nhlSkaterSeasonStats);
-		const goalieInserts = insertsFor(nhlGoalieSeasonStats);
-		const expectedStats = nhlSeasonTotals(mcdavid.seasonTotals);
+    await playerStatsTask.run(ctx)
 
-		expect(skaterInserts).toHaveLength(expectedStats.length);
-		expect(goalieInserts).toHaveLength(0);
-		expect(skaterInserts[0].values).toHaveProperty(
-			"playerId",
-			mcdavid.playerId,
-		);
-	});
+    const skaterInserts = insertsFor(nhlSkaterSeasonStats)
+    const goalieInserts = insertsFor(nhlGoalieSeasonStats)
+    const expectedStats = nhlSeasonTotals(mcdavid.seasonTotals)
 
-	it("routes goalie stats to nhlGoalieSeasonStats", async () => {
-		const { playerStatsTask } = await import("../player-stats");
-		mockNhlFetch.mockResolvedValue({
-			data: skinner,
-			raw: JSON.stringify(skinner),
-		});
+    expect(skaterInserts).toHaveLength(expectedStats.length)
+    expect(goalieInserts).toHaveLength(0)
+    expect(skaterInserts[0].values).toHaveProperty('playerId', mcdavid.playerId)
+  })
 
-		const { ctx, insertsFor } = createMockCtx({
-			selectData: new Map([
-				[nhlPlayers, [{ id: skinner.playerId, position: "G" }]],
-			]),
-		});
+  it('routes goalie stats to nhlGoalieSeasonStats', async () => {
+    const { playerStatsTask } = await import('../player-stats')
+    mockNhlFetch.mockResolvedValue({
+      data: skinner,
+      raw: JSON.stringify(skinner),
+    })
 
-		await playerStatsTask.run(ctx);
+    const { ctx, insertsFor } = createMockCtx({
+      selectData: new Map([
+        [nhlPlayers, [{ id: skinner.playerId, position: 'G' }]],
+      ]),
+    })
 
-		const goalieInserts = insertsFor(nhlGoalieSeasonStats);
-		const skaterInserts = insertsFor(nhlSkaterSeasonStats);
-		const expectedStats = nhlSeasonTotals(skinner.seasonTotals);
+    await playerStatsTask.run(ctx)
 
-		expect(goalieInserts).toHaveLength(expectedStats.length);
-		expect(skaterInserts).toHaveLength(0);
-		expect(goalieInserts[0].values).toHaveProperty(
-			"playerId",
-			skinner.playerId,
-		);
-	});
+    const goalieInserts = insertsFor(nhlGoalieSeasonStats)
+    const skaterInserts = insertsFor(nhlSkaterSeasonStats)
+    const expectedStats = nhlSeasonTotals(skinner.seasonTotals)
 
-	it("handles mixed skater + goalie in same run", async () => {
-		const { playerStatsTask } = await import("../player-stats");
-		mockNhlFetch.mockImplementation(async (url) => {
-			if (typeof url === "string" && url.includes(`/${mcdavid.playerId}/`)) {
-				return { data: mcdavid, raw: "{}" };
-			}
-			return { data: skinner, raw: "{}" };
-		});
+    expect(goalieInserts).toHaveLength(expectedStats.length)
+    expect(skaterInserts).toHaveLength(0)
+    expect(goalieInserts[0].values).toHaveProperty('playerId', skinner.playerId)
+  })
 
-		const { ctx, insertsFor } = createMockCtx({
-			selectData: new Map([
-				[
-					nhlPlayers,
-					[
-						{ id: mcdavid.playerId, position: "C" },
-						{ id: skinner.playerId, position: "G" },
-					],
-				],
-			]),
-		});
+  it('handles mixed skater + goalie in same run', async () => {
+    const { playerStatsTask } = await import('../player-stats')
+    mockNhlFetch.mockImplementation(async (url) => {
+      if (typeof url === 'string' && url.includes(`/${mcdavid.playerId}/`)) {
+        return { data: mcdavid, raw: '{}' }
+      }
+      return { data: skinner, raw: '{}' }
+    })
 
-		await playerStatsTask.run(ctx);
+    const { ctx, insertsFor } = createMockCtx({
+      selectData: new Map([
+        [
+          nhlPlayers,
+          [
+            { id: mcdavid.playerId, position: 'C' },
+            { id: skinner.playerId, position: 'G' },
+          ],
+        ],
+      ]),
+    })
 
-		expect(insertsFor(nhlSkaterSeasonStats).length).toBeGreaterThan(0);
-		expect(insertsFor(nhlGoalieSeasonStats).length).toBeGreaterThan(0);
-	});
+    await playerStatsTask.run(ctx)
 
-	it("suppresses error logs after 5 failures", async () => {
-		const { playerStatsTask } = await import("../player-stats");
-		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(insertsFor(nhlSkaterSeasonStats).length).toBeGreaterThan(0)
+    expect(insertsFor(nhlGoalieSeasonStats).length).toBeGreaterThan(0)
+  })
 
-		mockNhlFetch.mockRejectedValue(new Error("API down"));
+  it('suppresses error logs after 5 failures', async () => {
+    const { playerStatsTask } = await import('../player-stats')
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
-		const players = Array.from({ length: 8 }, (_, i) => ({
-			id: 1000 + i,
-			position: "C",
-		}));
-		const { ctx } = createMockCtx({
-			selectData: new Map([[nhlPlayers, players]]),
-		});
+    mockNhlFetch.mockRejectedValue(new Error('API down'))
 
-		await playerStatsTask.run(ctx);
+    const players = Array.from({ length: 8 }, (_, i) => ({
+      id: 1000 + i,
+      position: 'C',
+    }))
+    const { ctx } = createMockCtx({
+      selectData: new Map([[nhlPlayers, players]]),
+    })
 
-		// 5 individual errors + 1 suppression message = 6
-		expect(errorSpy).toHaveBeenCalledTimes(6);
-		errorSpy.mockRestore();
-	});
+    await playerStatsTask.run(ctx)
 
-	it("writes sync log with 'error' status on partial failure", async () => {
-		const { playerStatsTask } = await import("../player-stats");
-		vi.spyOn(console, "error").mockImplementation(() => {});
+    // 5 individual errors + 1 suppression message = 6
+    expect(errorSpy).toHaveBeenCalledTimes(6)
+    errorSpy.mockRestore()
+  })
 
-		mockNhlFetch.mockRejectedValue(new Error("fail"));
+  it("writes sync log with 'error' status on partial failure", async () => {
+    const { playerStatsTask } = await import('../player-stats')
+    vi.spyOn(console, 'error').mockImplementation(() => {})
 
-		const { ctx, insertsFor } = createMockCtx({
-			selectData: new Map([
-				[nhlPlayers, [{ id: 1, position: "C" }]],
-			]),
-		});
+    mockNhlFetch.mockRejectedValue(new Error('fail'))
 
-		await playerStatsTask.run(ctx);
+    const { ctx, insertsFor } = createMockCtx({
+      selectData: new Map([[nhlPlayers, [{ id: 1, position: 'C' }]]]),
+    })
 
-		const logInserts = insertsFor(nhlSyncLog);
-		expect(logInserts[0].values).toMatchObject({
-			taskName: "player-stats",
-			status: "error",
-		});
-		expect(logInserts[0].values).toHaveProperty("error", "1/1 players failed");
-		vi.restoreAllMocks();
-	});
+    await playerStatsTask.run(ctx)
 
-	it("archives raw response per player", async () => {
-		const { playerStatsTask } = await import("../player-stats");
-		mockNhlFetch.mockResolvedValue({
-			data: mcdavid,
-			raw: JSON.stringify(mcdavid),
-		});
+    const logInserts = insertsFor(nhlSyncLog)
+    expect(logInserts[0].values).toMatchObject({
+      taskName: 'player-stats',
+      status: 'error',
+    })
+    expect(logInserts[0].values).toHaveProperty('error', '1/1 players failed')
+    vi.restoreAllMocks()
+  })
 
-		const { ctx, archiveRaw } = createMockCtx({
-			selectData: new Map([
-				[nhlPlayers, [{ id: mcdavid.playerId, position: "C" }]],
-			]),
-		});
+  it('archives raw response per player', async () => {
+    const { playerStatsTask } = await import('../player-stats')
+    mockNhlFetch.mockResolvedValue({
+      data: mcdavid,
+      raw: JSON.stringify(mcdavid),
+    })
 
-		await playerStatsTask.run(ctx);
+    const { ctx, archiveRaw } = createMockCtx({
+      selectData: new Map([
+        [nhlPlayers, [{ id: mcdavid.playerId, position: 'C' }]],
+      ]),
+    })
 
-		expect(archiveRaw).toHaveBeenCalledWith(
-			`players/${mcdavid.playerId}`,
-			expect.stringContaining(".json"),
-			expect.any(String),
-		);
-	});
-});
+    await playerStatsTask.run(ctx)
+
+    expect(archiveRaw).toHaveBeenCalledWith(
+      `players/${mcdavid.playerId}`,
+      expect.stringContaining('.json'),
+      expect.any(String),
+    )
+  })
+})

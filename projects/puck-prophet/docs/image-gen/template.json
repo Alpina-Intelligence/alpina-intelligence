@@ -1,0 +1,61 @@
+{
+  "image_style": {
+    "medium": {
+      "technique": "linocut relief print",
+      "simulation": "woodblock or linoleum carving — all marks look gouged or cut, not drawn or painted",
+      "substrate": "aged kraft paper or raw cardboard — warm ochre-tan ground (#C4955A range), visible paper texture",
+      "ink": "single near-black ink layer (#1A1208), applied with visible pressure variation and tool drag marks",
+      "print_authenticity": "slight ink bleed at edges of forms, micro gaps where carve was shallow, no smooth gradients whatsoever"
+    },
+    "color": {
+      "base_palette": "monochromatic — near-black on kraft tan, two-tone only",
+      "accent_usage": "MAXIMUM two accent colors, used only as selective spot color on 1-2 focal details",
+      "accent_colors": "neon magenta (#FF00C8) and amber orange (#FF8C00) — as if a second UV ink pass",
+      "accent_rule": "accents appear only on supernatural / mystical focal points (e.g., glowing eyes, rune marks), never on background or structural elements",
+      "no_gradients": true,
+      "no_color_fills": true
+    },
+    "mark_making": {
+      "style": "all shading done via parallel gouge lines, cross-hatching, or stipple — never smooth tonal fills",
+      "stroke_character": "slightly uneven, hand-cut quality — wobble in long lines is correct and desirable",
+      "negative_space": "light areas are bare substrate showing through, not white paint",
+      "texture_density": "heavy in shadow areas, sparse in highlights, consistent directional grain"
+    },
+    "composition": {
+      "format": "wide cinematic crop, approximately 2:1 landscape ratio",
+      "figure_scale": "central figure fills roughly 60-70% of frame height, slightly off-center",
+      "background_treatment": "flat esoteric geometric line work — thin, delicate, sacred geometry or occult diagrams — creates texture without competing with figure",
+      "border": "decorative geometric frame using same line weight as background symbols, inset from edge"
+    },
+    "geometric_overlay": {
+      "style": "occult / esoteric sacred geometry — Solomonic seals, Enochian grids, Masonic compasses and squares, alchemical diagrams, Star of David variants, Metatron's Cube fragments",
+      "line_weight": "fine, uniform, clearly thinner than figure outlines",
+      "integration": "layered behind figure, partially obscured — feels like the background IS a ritual diagram or grimoire page",
+      "density": "moderate — legible as symbols, not abstract noise"
+    },
+    "figure_style": {
+      "outline": "heavy blocked silhouette, cut as a single massed form with interior detail carved out",
+      "detail_level": "readable at medium scale — iconic not illustrative",
+      "anatomy": "slightly exaggerated, dramatic — power pose preferred",
+      "clothing": "heavy robes, cloaks, or layered garments rendered as stacked carved planes"
+    },
+    "subject_guidance": {
+      "character": "the Puck Prophet — a hockey goalie masked figure with occult / supernatural power",
+      "mask": "goalie mask is the primary identity marker — should always be present and prominent",
+      "supernatural_indicators": "glowing eyes on mask (accent color), magical energy, floating runes, ritual implements",
+      "hockey_elements": "hockey stick as staff or wand, puck as ritual object, ice/rink geometry abstracted into sacred geometry patterns",
+      "tone": "sinister but not villainous — ancient, knowing, ambiguous — a seer not a destroyer"
+    },
+    "what_to_avoid": [
+      "smooth gradients or airbrush shading",
+      "color fills beyond the two accent colors",
+      "cartoon or comic book linework (no clean vector-style outlines)",
+      "digital painting or photorealistic rendering",
+      "white backgrounds",
+      "more than two accent colors",
+      "cute or friendly character proportions",
+      "modern flat design or icon aesthetics"
+    ]
+  },
+  "prompt_template": "Generate [CONCEPT] in the style of a linocut woodblock print on aged kraft paper. Near-black ink on warm tan substrate, all shading via carved gouge marks and cross-hatching, no gradients. Sparse neon magenta and amber orange spot color on supernatural focal elements only. Background filled with fine-line sacred geometry, Masonic symbolism, and esoteric diagrams. Wide cinematic 2:1 crop with decorative geometric border. Heavy carved figure silhouette, dramatic pose. Print authenticity: slight ink bleed, visible tool marks, hand-cut line quality."
+}

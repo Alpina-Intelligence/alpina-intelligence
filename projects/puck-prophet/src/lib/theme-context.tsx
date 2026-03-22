@@ -3,7 +3,7 @@ import { DEFAULT_THEME, THEME_NAMES, type ThemeName } from './themes'
 
 const STORAGE_KEY = 'puck-prophet-theme'
 
-interface ThemeContextValue {
+export interface ThemeContextValue {
 	theme: ThemeName
 	setTheme: (theme: ThemeName) => void
 	isHydrated: boolean

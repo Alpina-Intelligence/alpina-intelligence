@@ -1,113 +1,114 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { nhlGames, nhlSyncLog } from "@/db/nhl-schema";
-import { createMockCtx } from "./helpers/mock-ctx";
-import scheduleFixture from "@/__fixtures__/nhl/schedule-now.json";
-import type { NhlScheduleResponse } from "@/lib/nhl-api/types";
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import scheduleFixture from '@/__fixtures__/nhl/schedule-now.json'
+import { nhlGames, nhlSyncLog } from '@/db/nhl-schema'
+import type { NhlScheduleResponse } from '@/lib/nhl-api/types'
+import { createMockCtx } from './helpers/mock-ctx'
 
-vi.mock("@/lib/nhl-api", () => ({
-	nhlFetch: vi.fn(),
-	endpoints: {
-		schedule: {
-			now: vi.fn().mockReturnValue("https://mock/schedule/now"),
-		},
-	},
-}));
+vi.mock('@/lib/nhl-api', () => ({
+  nhlFetch: vi.fn(),
+  endpoints: {
+    schedule: {
+      now: vi.fn().mockReturnValue('https://mock/schedule/now'),
+    },
+  },
+}))
 
-import { nhlFetch } from "@/lib/nhl-api";
-const mockNhlFetch = vi.mocked(nhlFetch);
+import { nhlFetch } from '@/lib/nhl-api'
 
-const fixtureData = scheduleFixture as unknown as NhlScheduleResponse;
+const mockNhlFetch = vi.mocked(nhlFetch)
 
-describe("schedule task integration", () => {
-	beforeEach(() => {
-		vi.clearAllMocks();
-	});
+const fixtureData = scheduleFixture as unknown as NhlScheduleResponse
 
-	it("fetches from the schedule endpoint", async () => {
-		const { scheduleTask } = await import("../schedule");
-		mockNhlFetch.mockResolvedValue({
-			data: { ...fixtureData, gameWeek: [] },
-			raw: "{}",
-		});
-		const { ctx } = createMockCtx();
+describe('schedule task integration', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
-		await scheduleTask.run(ctx);
+  it('fetches from the schedule endpoint', async () => {
+    const { scheduleTask } = await import('../schedule')
+    mockNhlFetch.mockResolvedValue({
+      data: { ...fixtureData, gameWeek: [] },
+      raw: '{}',
+    })
+    const { ctx } = createMockCtx()
 
-		expect(mockNhlFetch).toHaveBeenCalledWith("https://mock/schedule/now");
-	});
+    await scheduleTask.run(ctx)
 
-	it("upserts games from all days in gameWeek", async () => {
-		const { scheduleTask } = await import("../schedule");
-		mockNhlFetch.mockResolvedValue({
-			data: fixtureData,
-			raw: JSON.stringify(fixtureData),
-		});
-		const { ctx, insertsFor } = createMockCtx();
+    expect(mockNhlFetch).toHaveBeenCalledWith('https://mock/schedule/now')
+  })
 
-		await scheduleTask.run(ctx);
+  it('upserts games from all days in gameWeek', async () => {
+    const { scheduleTask } = await import('../schedule')
+    mockNhlFetch.mockResolvedValue({
+      data: fixtureData,
+      raw: JSON.stringify(fixtureData),
+    })
+    const { ctx, insertsFor } = createMockCtx()
 
-		const gameInserts = insertsFor(nhlGames);
-		const totalGames = fixtureData.gameWeek.reduce(
-			(sum, day) => sum + day.games.length,
-			0,
-		);
-		expect(gameInserts).toHaveLength(totalGames);
-	});
+    await scheduleTask.run(ctx)
 
-	it("conflict set only updates scheduling fields, not scores", async () => {
-		const { scheduleTask } = await import("../schedule");
-		// Ensure fixture has at least one game
-		if (fixtureData.gameWeek[0]?.games.length === 0) return;
+    const gameInserts = insertsFor(nhlGames)
+    const totalGames = fixtureData.gameWeek.reduce(
+      (sum, day) => sum + day.games.length,
+      0,
+    )
+    expect(gameInserts).toHaveLength(totalGames)
+  })
 
-		mockNhlFetch.mockResolvedValue({ data: fixtureData, raw: "{}" });
-		const { ctx, insertsFor } = createMockCtx();
+  it('conflict set only updates scheduling fields, not scores', async () => {
+    const { scheduleTask } = await import('../schedule')
+    // Ensure fixture has at least one game
+    if (fixtureData.gameWeek[0]?.games.length === 0) return
 
-		await scheduleTask.run(ctx);
+    mockNhlFetch.mockResolvedValue({ data: fixtureData, raw: '{}' })
+    const { ctx, insertsFor } = createMockCtx()
 
-		const inserts = insertsFor(nhlGames);
-		const conflictSet = inserts[0].onConflict!.set;
-		// Schedule task only updates scheduling fields
-		expect(conflictSet).toHaveProperty("gameDate");
-		expect(conflictSet).toHaveProperty("startTimeUtc");
-		expect(conflictSet).toHaveProperty("venue");
-		expect(conflictSet).toHaveProperty("gameState");
-		// Should NOT have score/period fields
-		expect(conflictSet).not.toHaveProperty("homeScore");
-		expect(conflictSet).not.toHaveProperty("period");
-		expect(conflictSet).not.toHaveProperty("clock");
-	});
+    await scheduleTask.run(ctx)
 
-	it("returns count of upserted games", async () => {
-		const { scheduleTask } = await import("../schedule");
-		mockNhlFetch.mockResolvedValue({ data: fixtureData, raw: "{}" });
-		const { ctx } = createMockCtx();
+    const inserts = insertsFor(nhlGames)
+    const conflictSet = inserts[0].onConflict!.set
+    // Schedule task only updates scheduling fields
+    expect(conflictSet).toHaveProperty('gameDate')
+    expect(conflictSet).toHaveProperty('startTimeUtc')
+    expect(conflictSet).toHaveProperty('venue')
+    expect(conflictSet).toHaveProperty('gameState')
+    // Should NOT have score/period fields
+    expect(conflictSet).not.toHaveProperty('homeScore')
+    expect(conflictSet).not.toHaveProperty('period')
+    expect(conflictSet).not.toHaveProperty('clock')
+  })
 
-		const result = await scheduleTask.run(ctx);
+  it('returns count of upserted games', async () => {
+    const { scheduleTask } = await import('../schedule')
+    mockNhlFetch.mockResolvedValue({ data: fixtureData, raw: '{}' })
+    const { ctx } = createMockCtx()
 
-		const totalGames = fixtureData.gameWeek.reduce(
-			(sum, day) => sum + day.games.length,
-			0,
-		);
-		expect(result).toBe(totalGames);
-	});
+    const result = await scheduleTask.run(ctx)
 
-	it("handles empty schedule gracefully", async () => {
-		const { scheduleTask } = await import("../schedule");
-		mockNhlFetch.mockResolvedValue({
-			data: { ...fixtureData, gameWeek: [] },
-			raw: "{}",
-		});
-		const { ctx, insertsFor } = createMockCtx();
+    const totalGames = fixtureData.gameWeek.reduce(
+      (sum, day) => sum + day.games.length,
+      0,
+    )
+    expect(result).toBe(totalGames)
+  })
 
-		const result = await scheduleTask.run(ctx);
+  it('handles empty schedule gracefully', async () => {
+    const { scheduleTask } = await import('../schedule')
+    mockNhlFetch.mockResolvedValue({
+      data: { ...fixtureData, gameWeek: [] },
+      raw: '{}',
+    })
+    const { ctx, insertsFor } = createMockCtx()
 
-		expect(result).toBe(0);
-		const logInserts = insertsFor(nhlSyncLog);
-		expect(logInserts).toHaveLength(1);
-		expect(logInserts[0].values).toMatchObject({
-			taskName: "schedule",
-			status: "success",
-			recordsUpserted: 0,
-		});
-	});
-});
+    const result = await scheduleTask.run(ctx)
+
+    expect(result).toBe(0)
+    const logInserts = insertsFor(nhlSyncLog)
+    expect(logInserts).toHaveLength(1)
+    expect(logInserts[0].values).toMatchObject({
+      taskName: 'schedule',
+      status: 'success',
+      recordsUpserted: 0,
+    })
+  })
+})

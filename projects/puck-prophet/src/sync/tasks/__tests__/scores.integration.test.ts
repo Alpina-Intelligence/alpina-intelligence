@@ -1,190 +1,191 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { nhlGames, nhlGameGoals, nhlSyncLog } from "@/db/nhl-schema";
-import { createMockCtx } from "./helpers/mock-ctx";
-import scoreFixture from "@/__fixtures__/nhl/score-now.json";
-import type { NhlScoreResponse } from "@/lib/nhl-api/types";
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import scoreFixture from '@/__fixtures__/nhl/score-now.json'
+import { nhlGameGoals, nhlGames, nhlSyncLog } from '@/db/nhl-schema'
+import type { NhlScoreResponse } from '@/lib/nhl-api/types'
+import { createMockCtx } from './helpers/mock-ctx'
 
-vi.mock("@/lib/nhl-api", () => ({
-	nhlFetch: vi.fn(),
-	endpoints: {
-		scores: { now: vi.fn().mockReturnValue("https://mock/score/now") },
-	},
-}));
+vi.mock('@/lib/nhl-api', () => ({
+  nhlFetch: vi.fn(),
+  endpoints: {
+    scores: { now: vi.fn().mockReturnValue('https://mock/score/now') },
+  },
+}))
 
-import { nhlFetch } from "@/lib/nhl-api";
-const mockNhlFetch = vi.mocked(nhlFetch);
+import { nhlFetch } from '@/lib/nhl-api'
 
-const fixtureData = scoreFixture as unknown as NhlScoreResponse;
+const mockNhlFetch = vi.mocked(nhlFetch)
 
-describe("scores task integration", () => {
-	beforeEach(() => {
-		vi.clearAllMocks();
-	});
+const fixtureData = scoreFixture as unknown as NhlScoreResponse
 
-	it("fetches from the scores endpoint", async () => {
-		const { scoresTask } = await import("../scores");
-		mockNhlFetch.mockResolvedValue({
-			data: { ...fixtureData, games: [] },
-			raw: "{}",
-		});
-		const { ctx } = createMockCtx();
+describe('scores task integration', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
-		await scoresTask.run(ctx);
+  it('fetches from the scores endpoint', async () => {
+    const { scoresTask } = await import('../scores')
+    mockNhlFetch.mockResolvedValue({
+      data: { ...fixtureData, games: [] },
+      raw: '{}',
+    })
+    const { ctx } = createMockCtx()
 
-		expect(mockNhlFetch).toHaveBeenCalledWith("https://mock/score/now");
-	});
+    await scoresTask.run(ctx)
 
-	it("sets game state to 'live' when LIVE/CRIT games exist", async () => {
-		const { scoresTask } = await import("../scores");
-		const liveGames = fixtureData.games.filter(
-			(g) => g.gameState === "LIVE" || g.gameState === "CRIT",
-		);
-		// Fixture has LIVE games; if not, fabricate one
-		const games =
-			liveGames.length > 0
-				? fixtureData.games
-				: [{ ...fixtureData.games[0], gameState: "LIVE" as const }];
+    expect(mockNhlFetch).toHaveBeenCalledWith('https://mock/score/now')
+  })
 
-		mockNhlFetch.mockResolvedValue({
-			data: { ...fixtureData, games },
-			raw: "{}",
-		});
-		const { ctx, setGameState } = createMockCtx();
+  it("sets game state to 'live' when LIVE/CRIT games exist", async () => {
+    const { scoresTask } = await import('../scores')
+    const liveGames = fixtureData.games.filter(
+      (g) => g.gameState === 'LIVE' || g.gameState === 'CRIT',
+    )
+    // Fixture has LIVE games; if not, fabricate one
+    const games =
+      liveGames.length > 0
+        ? fixtureData.games
+        : [{ ...fixtureData.games[0], gameState: 'LIVE' as const }]
 
-		await scoresTask.run(ctx);
+    mockNhlFetch.mockResolvedValue({
+      data: { ...fixtureData, games },
+      raw: '{}',
+    })
+    const { ctx, setGameState } = createMockCtx()
 
-		expect(setGameState).toHaveBeenCalledWith("live");
-	});
+    await scoresTask.run(ctx)
 
-	it("sets game state to 'gameday' when games exist but none LIVE/CRIT", async () => {
-		const { scoresTask } = await import("../scores");
-		// Use only OFF/FUT games
-		const nonLiveGames = fixtureData.games
-			.filter((g) => g.gameState !== "LIVE" && g.gameState !== "CRIT")
-			.slice(0, 2);
-		const games =
-			nonLiveGames.length > 0
-				? nonLiveGames
-				: [{ ...fixtureData.games[0], gameState: "OFF" as const }];
+    expect(setGameState).toHaveBeenCalledWith('live')
+  })
 
-		mockNhlFetch.mockResolvedValue({
-			data: { ...fixtureData, games },
-			raw: "{}",
-		});
-		const { ctx, setGameState } = createMockCtx();
+  it("sets game state to 'gameday' when games exist but none LIVE/CRIT", async () => {
+    const { scoresTask } = await import('../scores')
+    // Use only OFF/FUT games
+    const nonLiveGames = fixtureData.games
+      .filter((g) => g.gameState !== 'LIVE' && g.gameState !== 'CRIT')
+      .slice(0, 2)
+    const games =
+      nonLiveGames.length > 0
+        ? nonLiveGames
+        : [{ ...fixtureData.games[0], gameState: 'OFF' as const }]
 
-		await scoresTask.run(ctx);
+    mockNhlFetch.mockResolvedValue({
+      data: { ...fixtureData, games },
+      raw: '{}',
+    })
+    const { ctx, setGameState } = createMockCtx()
 
-		expect(setGameState).toHaveBeenCalledWith("gameday");
-	});
+    await scoresTask.run(ctx)
 
-	it("sets game state to 'quiet' when no games", async () => {
-		const { scoresTask } = await import("../scores");
-		mockNhlFetch.mockResolvedValue({
-			data: { ...fixtureData, games: [] },
-			raw: "{}",
-		});
-		const { ctx, setGameState } = createMockCtx();
+    expect(setGameState).toHaveBeenCalledWith('gameday')
+  })
 
-		await scoresTask.run(ctx);
+  it("sets game state to 'quiet' when no games", async () => {
+    const { scoresTask } = await import('../scores')
+    mockNhlFetch.mockResolvedValue({
+      data: { ...fixtureData, games: [] },
+      raw: '{}',
+    })
+    const { ctx, setGameState } = createMockCtx()
 
-		expect(setGameState).toHaveBeenCalledWith("quiet");
-	});
+    await scoresTask.run(ctx)
 
-	it("upserts each game into nhlGames", async () => {
-		const { scoresTask } = await import("../scores");
-		// Strip goals to simplify counting
-		const games = fixtureData.games.slice(0, 3).map((g) => ({
-			...g,
-			goals: [],
-		}));
-		mockNhlFetch.mockResolvedValue({
-			data: { ...fixtureData, games },
-			raw: "{}",
-		});
-		const { ctx, insertsFor } = createMockCtx();
+    expect(setGameState).toHaveBeenCalledWith('quiet')
+  })
 
-		await scoresTask.run(ctx);
+  it('upserts each game into nhlGames', async () => {
+    const { scoresTask } = await import('../scores')
+    // Strip goals to simplify counting
+    const games = fixtureData.games.slice(0, 3).map((g) => ({
+      ...g,
+      goals: [],
+    }))
+    mockNhlFetch.mockResolvedValue({
+      data: { ...fixtureData, games },
+      raw: '{}',
+    })
+    const { ctx, insertsFor } = createMockCtx()
 
-		const gameInserts = insertsFor(nhlGames);
-		expect(gameInserts).toHaveLength(3);
-		expect(gameInserts[0].values).toHaveProperty("id", games[0].id);
-		expect(gameInserts[0].onConflict).not.toBeNull();
-		expect(gameInserts[0].onConflict!.set).toHaveProperty("gameState");
-		expect(gameInserts[0].onConflict!.set).toHaveProperty("homeScore");
-	});
+    await scoresTask.run(ctx)
 
-	it("upserts goals for games that have them", async () => {
-		const { scoresTask } = await import("../scores");
-		const gameWithGoals = fixtureData.games.find(
-			(g) => g.goals && g.goals.length > 0,
-		);
-		if (!gameWithGoals) return;
+    const gameInserts = insertsFor(nhlGames)
+    expect(gameInserts).toHaveLength(3)
+    expect(gameInserts[0].values).toHaveProperty('id', games[0].id)
+    expect(gameInserts[0].onConflict).not.toBeNull()
+    expect(gameInserts[0].onConflict!.set).toHaveProperty('gameState')
+    expect(gameInserts[0].onConflict!.set).toHaveProperty('homeScore')
+  })
 
-		mockNhlFetch.mockResolvedValue({
-			data: { ...fixtureData, games: [gameWithGoals] },
-			raw: "{}",
-		});
-		const { ctx, insertsFor } = createMockCtx();
+  it('upserts goals for games that have them', async () => {
+    const { scoresTask } = await import('../scores')
+    const gameWithGoals = fixtureData.games.find(
+      (g) => g.goals && g.goals.length > 0,
+    )
+    if (!gameWithGoals) return
 
-		await scoresTask.run(ctx);
+    mockNhlFetch.mockResolvedValue({
+      data: { ...fixtureData, games: [gameWithGoals] },
+      raw: '{}',
+    })
+    const { ctx, insertsFor } = createMockCtx()
 
-		const goalInserts = insertsFor(nhlGameGoals);
-		expect(goalInserts).toHaveLength(gameWithGoals.goals!.length);
-		expect(goalInserts[0].values).toHaveProperty("gameId", gameWithGoals.id);
-	});
+    await scoresTask.run(ctx)
 
-	it("archives raw response with 'scores' bucket", async () => {
-		const { scoresTask } = await import("../scores");
-		const rawJson = JSON.stringify(fixtureData);
-		mockNhlFetch.mockResolvedValue({
-			data: { ...fixtureData, games: [] },
-			raw: rawJson,
-		});
-		const { ctx, archiveRaw } = createMockCtx();
+    const goalInserts = insertsFor(nhlGameGoals)
+    expect(goalInserts).toHaveLength(gameWithGoals.goals!.length)
+    expect(goalInserts[0].values).toHaveProperty('gameId', gameWithGoals.id)
+  })
 
-		await scoresTask.run(ctx);
+  it("archives raw response with 'scores' bucket", async () => {
+    const { scoresTask } = await import('../scores')
+    const rawJson = JSON.stringify(fixtureData)
+    mockNhlFetch.mockResolvedValue({
+      data: { ...fixtureData, games: [] },
+      raw: rawJson,
+    })
+    const { ctx, archiveRaw } = createMockCtx()
 
-		expect(archiveRaw).toHaveBeenCalledWith(
-			"scores",
-			expect.stringContaining(".json"),
-			rawJson,
-		);
-	});
+    await scoresTask.run(ctx)
 
-	it("returns total upserted count (games + goals)", async () => {
-		const { scoresTask } = await import("../scores");
-		const gameWithGoals = fixtureData.games.find(
-			(g) => g.goals && g.goals.length > 0,
-		);
-		if (!gameWithGoals) return;
+    expect(archiveRaw).toHaveBeenCalledWith(
+      'scores',
+      expect.stringContaining('.json'),
+      rawJson,
+    )
+  })
 
-		mockNhlFetch.mockResolvedValue({
-			data: { ...fixtureData, games: [gameWithGoals] },
-			raw: "{}",
-		});
-		const { ctx } = createMockCtx();
+  it('returns total upserted count (games + goals)', async () => {
+    const { scoresTask } = await import('../scores')
+    const gameWithGoals = fixtureData.games.find(
+      (g) => g.goals && g.goals.length > 0,
+    )
+    if (!gameWithGoals) return
 
-		const result = await scoresTask.run(ctx);
+    mockNhlFetch.mockResolvedValue({
+      data: { ...fixtureData, games: [gameWithGoals] },
+      raw: '{}',
+    })
+    const { ctx } = createMockCtx()
 
-		expect(result).toBe(1 + (gameWithGoals.goals?.length ?? 0));
-	});
+    const result = await scoresTask.run(ctx)
 
-	it("writes sync log with success status", async () => {
-		const { scoresTask } = await import("../scores");
-		mockNhlFetch.mockResolvedValue({
-			data: { ...fixtureData, games: [] },
-			raw: "{}",
-		});
-		const { ctx, insertsFor } = createMockCtx();
+    expect(result).toBe(1 + (gameWithGoals.goals?.length ?? 0))
+  })
 
-		await scoresTask.run(ctx);
+  it('writes sync log with success status', async () => {
+    const { scoresTask } = await import('../scores')
+    mockNhlFetch.mockResolvedValue({
+      data: { ...fixtureData, games: [] },
+      raw: '{}',
+    })
+    const { ctx, insertsFor } = createMockCtx()
 
-		const logInserts = insertsFor(nhlSyncLog);
-		expect(logInserts).toHaveLength(1);
-		expect(logInserts[0].values).toMatchObject({
-			taskName: "scores",
-			status: "success",
-		});
-	});
-});
+    await scoresTask.run(ctx)
+
+    const logInserts = insertsFor(nhlSyncLog)
+    expect(logInserts).toHaveLength(1)
+    expect(logInserts[0].values).toMatchObject({
+      taskName: 'scores',
+      status: 'success',
+    })
+  })
+})

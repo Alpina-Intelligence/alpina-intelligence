@@ -173,10 +173,11 @@ describe("transformPlayer", () => {
 describe("transformStanding", () => {
 	it("transforms a standing record with all core + split fields", () => {
 		const standing = standings.standings[0];
-		const result = transformStanding(standing, 1);
+		const snapshotDate = "2025-04-15";
+		const result = transformStanding(standing, 1, snapshotDate);
 
 		expect(result.id).toBe(
-			`${standing.seasonId}-${standing.teamAbbrev.default}`,
+			`${standing.seasonId}-${standing.teamAbbrev.default}-${snapshotDate}`,
 		);
 		expect(result.seasonId).toBe(standing.seasonId);
 		expect(result.teamAbbrev).toBe(standing.teamAbbrev.default);
@@ -233,9 +234,10 @@ describe("transformSkaterSeasonStats", () => {
 		);
 		if (!currentSeason) return;
 
-		const result = transformSkaterSeasonStats(mcdavid.playerId, currentSeason);
+		const snapshotDate = "2025-04-15";
+		const result = transformSkaterSeasonStats(mcdavid.playerId, currentSeason, snapshotDate);
 
-		expect(result.id).toBe(`${mcdavid.playerId}-20252026-2`);
+		expect(result.id).toBe(`${mcdavid.playerId}-20252026-2-${snapshotDate}`);
 		expect(result.playerId).toBe(mcdavid.playerId);
 		expect(result.season).toBe(20252026);
 		expect(result.gameType).toBe(2);
@@ -254,9 +256,10 @@ describe("transformGoalieSeasonStats", () => {
 		);
 		if (!currentSeason) return;
 
-		const result = transformGoalieSeasonStats(skinner.playerId, currentSeason);
+		const snapshotDate = "2025-04-15";
+		const result = transformGoalieSeasonStats(skinner.playerId, currentSeason, snapshotDate);
 
-		expect(result.id).toBe(`${skinner.playerId}-20252026-2`);
+		expect(result.id).toBe(`${skinner.playerId}-20252026-2-${snapshotDate}`);
 		expect(result.playerId).toBe(skinner.playerId);
 		expect(result.gamesPlayed).toBeGreaterThan(0);
 		expect(result.wins).toBeGreaterThanOrEqual(0);
