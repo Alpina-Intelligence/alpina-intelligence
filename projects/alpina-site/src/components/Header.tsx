@@ -1,6 +1,8 @@
 import { Link } from "@tanstack/react-router";
+import { AlpinaLogo } from "@/components/AlpinaLogo";
 import {
 	Activity,
+	BookOpen,
 	ChevronDown,
 	ChevronRight,
 	Home,
@@ -30,11 +32,7 @@ export default function Header() {
 					<div className="flex items-center justify-between h-12">
 						{/* Logo/Brand */}
 						<Link to="/" className="flex items-center gap-2 group">
-							<div className="w-7 h-7 rounded-[2px] bg-primary/15 border border-primary/30 flex items-center justify-center transition-colors group-hover:bg-primary/25 group-hover:border-primary/50">
-								<span className="font-mono font-bold text-primary text-xs">
-									A
-								</span>
-							</div>
+							<AlpinaLogo className="w-7 h-7 text-primary" />
 							<span className="font-mono font-medium tracking-wider text-foreground text-sm uppercase">
 								Alpina
 							</span>
@@ -43,9 +41,11 @@ export default function Header() {
 						{/* Desktop nav links */}
 						<nav className="hidden md:flex items-center gap-1">
 							<NavLink to="/">Platform</NavLink>
-							<span className="text-border px-2">|</span>
+							<span className="text-foreground-subtle px-2">|</span>
+							<NavLink to="/blog">Blog</NavLink>
+							<span className="text-foreground-subtle px-2">|</span>
 							<NavLink to="/admin/monitoring">Monitoring</NavLink>
-							<span className="text-border px-2">|</span>
+							<span className="text-foreground-subtle px-2">|</span>
 							<NavLink to="/admin/configuration">Config</NavLink>
 						</nav>
 
@@ -103,6 +103,14 @@ export default function Header() {
 						onClick={() => setIsOpen(false)}
 					>
 						Home
+					</SidebarLink>
+
+					<SidebarLink
+						to="/blog"
+						icon={<BookOpen size={14} />}
+						onClick={() => setIsOpen(false)}
+					>
+						Blog
 					</SidebarLink>
 
 					{/* Admin Links */}

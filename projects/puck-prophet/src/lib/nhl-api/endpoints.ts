@@ -39,6 +39,7 @@ export const schedule = {
 
 export const season = {
   list: () => `${API_WEB_BASE}/v1/season`,
+  standingsSeason: () => `${API_WEB_BASE}/v1/standings-season`,
 }
 
 export const leaders = {

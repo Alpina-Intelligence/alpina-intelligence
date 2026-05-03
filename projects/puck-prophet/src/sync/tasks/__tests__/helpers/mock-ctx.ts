@@ -4,6 +4,7 @@ import {
   nhlGames,
   nhlGoalieSeasonStats,
   nhlPlayers,
+  nhlSeasons,
   nhlSkaterSeasonStats,
   nhlStandings,
   nhlSyncLog,
@@ -52,6 +53,7 @@ const TABLE_NAMES = new Map<unknown, string>([
   [nhlGames, 'games'],
   [nhlGameGoals, 'goals'],
   [nhlStandings, 'standings'],
+  [nhlSeasons, 'seasons'],
   [nhlSkaterSeasonStats, 'skaterStats'],
   [nhlGoalieSeasonStats, 'goalieStats'],
   [nhlSyncLog, 'syncLog'],
@@ -88,26 +90,21 @@ export function createMockCtx(opts: MockCtxOptions = {}): MockCtxResult {
   }))
 
   // ---- Mock select chain ----
-  // db.select(columns?).from(table) → thenable + { where() → thenable }
+  // Supports: db.select().from(table), .where(), .orderBy(), .limit()
+  function createQueryChain(rows: unknown[]) {
+    const promise = Promise.resolve(rows)
+    const chain = Object.assign(promise, {
+      where: vi.fn((): typeof chain => chain),
+      orderBy: vi.fn((): typeof chain => chain),
+      limit: vi.fn((n: number) => createQueryChain(rows.slice(0, n))),
+    })
+    return chain
+  }
+
   const mockSelect = vi.fn((_columns?: unknown) => ({
     from: vi.fn((table: unknown) => {
       const rows = selectData.get(table) ?? []
-
-      // Return a "thenable" that also has .where()
-      // This lets both patterns work:
-      //   await ctx.db.select().from(nhlTeams)
-      //   await ctx.db.select({...}).from(nhlPlayers).where(eq(...))
-      return {
-        then(
-          resolve: (value: unknown[]) => void,
-          reject?: (err: unknown) => void,
-        ) {
-          return Promise.resolve(rows).then(resolve, reject)
-        },
-        where(_condition: unknown) {
-          return Promise.resolve(rows)
-        },
-      }
+      return createQueryChain(rows)
     }),
   }))
 

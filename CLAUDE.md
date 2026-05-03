@@ -2,15 +2,15 @@
 
 Guidance for Claude Code when working in this repository.
 
-## Tech Stack
+## Monorepo Structure
 
-- **TanStack Start** - Full-stack React framework with SSR
-- **Bun** - Runtime and package manager
-- **shadcn/ui** - UI components
-- **Tailwind CSS v4** - Styling
-- **Drizzle ORM** - Database (PostgreSQL)
-- **TanStack Query** - Server state management (caching, refetch, mutations)
-- **Biome** - Linting and formatting
+Projects live in `projects/`; shared libraries in `packages/`. Root provides shared TypeScript and Biome config.
+
+| Project | Stack | Notes |
+| --- | --- | --- |
+| `projects/alpina-site` | TanStack Start + shadcn/ui | Frontend — use the `alpina-frontend` skill |
+| `projects/puck-prophet` | TanStack Start + Drizzle/PostgreSQL | Frontend + DB layer — use `alpina-frontend` skill for UI |
+| `projects/unified-data-platform` | Python / uv | Data/backend; no frontend |
 
 ## Bun Over Node
 
@@ -27,32 +27,12 @@ Prefer Bun built-in APIs:
 - `Bun.file()` / `Bun.write()` instead of `node:fs`
 - `Bun.serve()` for servers (supports WebSocket, HTTPS)
 - `Bun.$\`cmd\`` instead of execa for shell commands
-- Bun auto-loads `.env` - no dotenv needed
+- Bun auto-loads `.env` — no dotenv needed
 
-## shadcn/ui Components
+## Tooling
 
-1. **Search/explore** with MCP tools (`mcp__shadcn__search_items_in_registries`, etc.)
-2. **Install** with CLI: `bunx --bun shadcn@canary add <component>`
-3. **Always use shadcn components** — never use native `<input>`, `<select>`, `<button>`, or `<label>` directly. Use `Input`, `Select`, `Button`, `Label` from `@/components/ui/`.
-4. **Use Radix `Select`** (not `NativeSelect`) for dropdowns — native `<select>` dropdown popups are rendered by the browser and cannot be themed with CSS.
-5. **Forms**: Use shadcn `Field`/`FieldLabel`/`FieldError` + react-hook-form (`Controller`/`useForm`) + zod for validation. Define schemas in `src/lib/schemas/`.
+**Biome** for linting and formatting (config at repo root).
 
-## TanStack Start Notes
+## Frontend work → use the `alpina-frontend` skill
 
-- No React Server Components support yet
-- Don't use `'use client'` or `'use server'` directives
-- Use `useId()` hook for form field IDs (SSR hydration safety)
-- Server functions must return plain serializable data — `db.execute()` returns a pg `Result` object that crashes seroval. Extract `.rows` before returning.
-- Use zod schemas in `inputValidator`: `.inputValidator((d: unknown) => schema.parse(d))` — not identity functions.
-
-## TanStack Query
-
-- Use `queryOptions()` to define queries in `src/lib/queries/` — reuse in loaders and components
-- Route loaders: `context.queryClient.ensureQueryData(myQuery())`
-- Components: `useSuspenseQuery(myQuery())` for data, `useMutation()` for writes
-- Invalidate after mutations: `queryClient.invalidateQueries({ queryKey: ... })`
-- Define query key factories per domain (e.g. `adminKeys.dashboard()`)
-
-## Monorepo Structure
-
-Projects live in `projects/` and `packages/`. Root provides shared TypeScript and Biome config.
+For any UI/frontend work in `alpina-site` or `puck-prophet` (pages, components, themes, forms, data fetching with TanStack Query, TanStack Start gotchas), invoke the `alpina-frontend` skill. It is the source of truth for shadcn/ui usage, typography, color tokens, form patterns, and TanStack Start framework gotchas.

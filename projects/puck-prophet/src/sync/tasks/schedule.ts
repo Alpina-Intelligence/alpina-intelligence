@@ -25,8 +25,8 @@ export const scheduleTask: SyncTask = {
 
     for (const day of data.gameWeek) {
       for (const game of day.games) {
-        // Schedule games have the same shape as score games
-        // but may lack scores/SOG for future games
+        // NhlScheduleGame has all fields transformGame needs; period/clock/goals
+        // are optional in NhlGameScore and handled with ?? null fallbacks
         const row = transformGame(game as NhlGameScore)
         await ctx.db
           .insert(nhlGames)

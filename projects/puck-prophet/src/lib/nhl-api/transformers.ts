@@ -5,6 +5,7 @@ import type {
   nhlGoalieGameLogs,
   nhlGoalieSeasonStats,
   nhlPlayers,
+  nhlSeasons,
   nhlSkaterAdvancedStats,
   nhlSkaterGameLogs,
   nhlSkaterSeasonStats,
@@ -18,6 +19,7 @@ import type {
   NhlGoalieGameLogEntry,
   NhlGoalieSavesByStrengthRow,
   NhlRosterPlayer,
+  NhlSeasonEntry,
   NhlSeasonTotal,
   NhlSkaterFaceoffPercentagesRow,
   NhlSkaterGameLogEntry,
@@ -28,7 +30,6 @@ import type {
   NhlSkaterRealtimeRow,
   NhlSkaterScoringRatesRow,
   NhlStandingRecord,
-  NhlTeamScore,
 } from './types'
 
 // Drizzle insert types
@@ -43,17 +44,32 @@ type SkaterAdvancedInsert = typeof nhlSkaterAdvancedStats.$inferInsert
 type GoalieAdvancedInsert = typeof nhlGoalieAdvancedStats.$inferInsert
 type SkaterGameLogInsert = typeof nhlSkaterGameLogs.$inferInsert
 type GoalieGameLogInsert = typeof nhlGoalieGameLogs.$inferInsert
+type SeasonInsert = typeof nhlSeasons.$inferInsert
+
+// ---------------------------------------------------------------------------
+// Seasons — from standings-season API
+// ---------------------------------------------------------------------------
+export function transformSeason(entry: NhlSeasonEntry): SeasonInsert {
+  return {
+    id: entry.id,
+    standingsStart: entry.standingsStart,
+    standingsEnd: entry.standingsEnd,
+    conferencesInUse: entry.conferencesInUse,
+    divisionsInUse: entry.divisionsInUse,
+    wildcardInUse: entry.wildcardInUse,
+    tiesInUse: entry.tiesInUse,
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Teams — extracted from standings (most complete source of team metadata)
 // ---------------------------------------------------------------------------
-export function transformTeamFromStanding(s: NhlStandingRecord): TeamInsert {
+export function transformTeamFromStanding(
+  s: NhlStandingRecord,
+  teamId: number,
+): TeamInsert {
   return {
-    // Team ID isn't in the standings response, so we derive it from
-    // the roster sync or use a lookup. For now we skip `id` and use
-    // abbrev as the identifier during standings sync. The roster sync
-    // will populate the full team record with the NHL team ID.
-    id: 0, // placeholder — roster sync sets the real ID
+    id: teamId,
     abbrev: s.teamAbbrev.default,
     name: s.teamCommonName.default,
     fullName: `${s.teamName.default}`,
@@ -62,23 +78,6 @@ export function transformTeamFromStanding(s: NhlStandingRecord): TeamInsert {
     division: s.divisionName,
     divisionAbbrev: s.divisionAbbrev,
     logoUrl: s.teamLogo,
-  }
-}
-
-export function transformTeamFromScore(
-  t: NhlTeamScore,
-  standing?: NhlStandingRecord,
-): TeamInsert {
-  return {
-    id: t.id,
-    abbrev: t.abbrev,
-    name: t.name.default,
-    fullName: t.name.default, // score response only has short name
-    conference: standing?.conferenceName ?? '',
-    conferenceAbbrev: standing?.conferenceAbbrev ?? '',
-    division: standing?.divisionName ?? '',
-    divisionAbbrev: standing?.divisionAbbrev ?? '',
-    logoUrl: t.logo,
   }
 }
 
@@ -349,7 +348,12 @@ export function transformGoalieGameLog(
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Check if a seasonTotal entry is for a goalie (has goalie-specific fields) */
+/**
+ * Check if a seasonTotal entry is for a goalie (has goalie-specific fields).
+ * NOTE: Prefer using the player's DB position (player.position === 'G')
+ * when available. This heuristic is a fallback for cases where the
+ * player record is not available.
+ */
 export function isGoalieSeasonTotal(st: NhlSeasonTotal): boolean {
   return st.savePctg !== undefined || st.goalsAgainstAvg !== undefined
 }
@@ -369,6 +373,25 @@ export function currentSeasonId(): number {
   const month = now.getMonth() + 1
   const startYear = month >= 7 ? year : year - 1
   return startYear * 10000 + (startYear + 1)
+}
+
+/** Find the active season from a list of season rows, based on a reference date.
+ *  Falls back to currentSeasonId() if no match. */
+export function findActiveSeasonId(
+  seasons: Array<{ id: number; standingsStart: string; standingsEnd: string }>,
+  date?: string,
+): number {
+  const ref = date ?? new Date().toISOString().slice(0, 10)
+  const match = seasons.find(
+    (s) => ref >= s.standingsStart && ref <= s.standingsEnd,
+  )
+  if (match) return match.id
+  // Fallback: most recent season that started before or on ref date
+  const past = seasons
+    .filter((s) => s.standingsStart <= ref)
+    .sort((a, b) => b.id - a.id)
+  if (past.length > 0) return past[0].id
+  return currentSeasonId()
 }
 
 // ---------------------------------------------------------------------------

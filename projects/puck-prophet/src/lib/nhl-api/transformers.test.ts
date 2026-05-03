@@ -8,11 +8,12 @@ import {
 	transformGame,
 	transformGoal,
 	transformTeamFromStanding,
-	transformTeamFromScore,
 	transformPlayer,
 	transformStanding,
 	transformSkaterSeasonStats,
 	transformGoalieSeasonStats,
+	transformSeason,
+	findActiveSeasonId,
 	isGoalieSeasonTotal,
 	nhlSeasonTotals,
 } from "./transformers";
@@ -108,8 +109,9 @@ describe("transformGoal", () => {
 describe("transformTeamFromStanding", () => {
 	it("extracts team data from a standing record", () => {
 		const standing = standings.standings[0];
-		const result = transformTeamFromStanding(standing);
+		const result = transformTeamFromStanding(standing, 42);
 
+		expect(result.id).toBe(42);
 		expect(result.abbrev).toBe(standing.teamAbbrev.default);
 		expect(result.name).toBe(standing.teamCommonName.default);
 		expect(result.conference).toBe(standing.conferenceName);
@@ -117,18 +119,6 @@ describe("transformTeamFromStanding", () => {
 		expect(result.division).toBe(standing.divisionName);
 		expect(result.divisionAbbrev).toBe(standing.divisionAbbrev);
 		expect(result.logoUrl).toBe(standing.teamLogo);
-	});
-});
-
-describe("transformTeamFromScore", () => {
-	it("extracts team data from a score team object", () => {
-		const game = scores.games[0];
-		const result = transformTeamFromScore(game.homeTeam);
-
-		expect(result.id).toBe(game.homeTeam.id);
-		expect(result.abbrev).toBe(game.homeTeam.abbrev);
-		expect(result.name).toBe(game.homeTeam.name.default);
-		expect(result.logoUrl).toBe(game.homeTeam.logo);
 	});
 });
 
@@ -305,5 +295,53 @@ describe("nhlSeasonTotals", () => {
 
 		// McDavid played in OHL before NHL, so filtered should be fewer
 		expect(filtered.length).toBeLessThanOrEqual(all.length);
+	});
+});
+
+describe("transformSeason", () => {
+	it("maps API season entry to DB row", () => {
+		const entry = {
+			id: 20252026,
+			standingsStart: "2025-10-07",
+			standingsEnd: "2026-04-17",
+			conferencesInUse: true,
+			divisionsInUse: true,
+			wildcardInUse: true,
+			tiesInUse: false,
+		};
+		const result = transformSeason(entry);
+
+		expect(result.id).toBe(20252026);
+		expect(result.standingsStart).toBe("2025-10-07");
+		expect(result.standingsEnd).toBe("2026-04-17");
+		expect(result.conferencesInUse).toBe(true);
+		expect(result.tiesInUse).toBe(false);
+	});
+});
+
+describe("findActiveSeasonId", () => {
+	const seasons = [
+		{ id: 20242025, standingsStart: "2024-10-04", standingsEnd: "2025-04-17" },
+		{ id: 20252026, standingsStart: "2025-10-07", standingsEnd: "2026-04-15" },
+	];
+
+	it("returns matching season when date is within range", () => {
+		expect(findActiveSeasonId(seasons, "2025-12-15")).toBe(20252026);
+		expect(findActiveSeasonId(seasons, "2025-01-15")).toBe(20242025);
+	});
+
+	it("returns most recent past season when date is in offseason gap", () => {
+		// Summer gap between seasons
+		expect(findActiveSeasonId(seasons, "2025-07-15")).toBe(20242025);
+	});
+
+	it("returns most recent season when date is after all seasons", () => {
+		expect(findActiveSeasonId(seasons, "2026-08-01")).toBe(20252026);
+	});
+
+	it("falls back to currentSeasonId when no seasons provided", () => {
+		const result = findActiveSeasonId([]);
+		expect(typeof result).toBe("number");
+		expect(result).toBeGreaterThan(20000000);
 	});
 });

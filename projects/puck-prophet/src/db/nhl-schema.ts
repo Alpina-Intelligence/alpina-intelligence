@@ -28,6 +28,23 @@ export const nhlTeams = pgTable('nhl_teams', {
 })
 
 // ---------------------------------------------------------------------------
+// Seasons (from standings-season API)
+// ---------------------------------------------------------------------------
+export const nhlSeasons = pgTable('nhl_seasons', {
+  id: integer('id').primaryKey(), // e.g. 20252026
+  standingsStart: date('standings_start').notNull(),
+  standingsEnd: date('standings_end').notNull(),
+  conferencesInUse: boolean('conferences_in_use').notNull(),
+  divisionsInUse: boolean('divisions_in_use').notNull(),
+  wildcardInUse: boolean('wildcard_in_use').notNull(),
+  tiesInUse: boolean('ties_in_use').notNull(),
+  updatedAt: timestamp('updated_at')
+    .defaultNow()
+    .$onUpdate(() => new Date())
+    .notNull(),
+})
+
+// ---------------------------------------------------------------------------
 // Players
 // ---------------------------------------------------------------------------
 export const nhlPlayers = pgTable(

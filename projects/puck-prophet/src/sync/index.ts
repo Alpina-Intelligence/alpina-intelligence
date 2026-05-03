@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { db } from '@/db'
-import { nhlEngineState, nhlRawResponseCache } from '@/db/nhl-schema'
+import { nhlEngineState, nhlRawResponseCache, nhlTeams } from '@/db/nhl-schema'
+import { bootstrapSeasons, bootstrapTeams } from './bootstrap'
 import { loadConfig } from './config'
 import { createScheduler, type GameState, type SyncContext } from './scheduler'
 import { advancedStatsTask } from './tasks/advanced-stats'
@@ -86,6 +87,16 @@ const tasks = [
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
+
+// Auto-bootstrap teams if DB is empty (first run without backfill)
+const teamCount = await db.select({ id: nhlTeams.id }).from(nhlTeams)
+if (teamCount.length === 0) {
+  console.log('[sync] Fresh DB detected — bootstrapping teams + seasons...')
+  const seeded = await bootstrapTeams(db)
+  console.log(`[sync] Bootstrapped ${seeded} teams`)
+  const seasonCount = await bootstrapSeasons(db)
+  console.log(`[sync] Bootstrapped ${seasonCount} seasons`)
+}
 
 // Load config from DB (falls back gracefully if table is empty/missing)
 const initialConfig = await loadConfig(db).catch(() => new Map())

@@ -2,12 +2,13 @@ import { eq } from 'drizzle-orm'
 import {
   nhlGoalieGameLogs,
   nhlPlayers,
+  nhlSeasons,
   nhlSkaterGameLogs,
   nhlSyncLog,
 } from '@/db/nhl-schema'
 import { endpoints, NhlApiError, nhlFetch } from '@/lib/nhl-api'
 import {
-  currentSeasonId,
+  findActiveSeasonId,
   transformGoalieGameLog,
   transformSkaterGameLog,
 } from '@/lib/nhl-api/transformers'
@@ -26,7 +27,8 @@ export const gameLogsTask: SyncTask = {
 
   async run(ctx: SyncContext): Promise<number> {
     const startedAt = new Date()
-    const seasonId = currentSeasonId()
+    const seasons = await ctx.db.select().from(nhlSeasons)
+    const seasonId = findActiveSeasonId(seasons)
 
     const activePlayers = await ctx.db
       .select({ id: nhlPlayers.id, position: nhlPlayers.position })

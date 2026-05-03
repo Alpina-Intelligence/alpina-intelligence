@@ -1,11 +1,15 @@
 import { and, eq, ne } from 'drizzle-orm'
-import { nhlStandings, nhlSyncLog, nhlTeams } from '@/db/nhl-schema'
+import { nhlSeasons, nhlStandings, nhlSyncLog, nhlTeams } from '@/db/nhl-schema'
 import { endpoints, nhlFetch } from '@/lib/nhl-api'
 import {
+  transformSeason,
   transformStanding,
   transformTeamFromStanding,
 } from '@/lib/nhl-api/transformers'
-import type { NhlStandingsResponse } from '@/lib/nhl-api/types'
+import type {
+  NhlStandingsResponse,
+  NhlStandingsSeasonResponse,
+} from '@/lib/nhl-api/types'
 import type { SyncContext, SyncTask } from '../scheduler'
 import { intervals } from '../scheduler'
 
@@ -20,6 +24,25 @@ export const standingsTask: SyncTask = {
 
   async run(ctx: SyncContext): Promise<number> {
     const startedAt = new Date()
+
+    // Sync seasons (lightweight, ~2KB response)
+    const { data: seasonData } = await nhlFetch<NhlStandingsSeasonResponse>(
+      endpoints.season.standingsSeason(),
+    )
+    for (const entry of seasonData.seasons) {
+      const row = transformSeason(entry)
+      await ctx.db
+        .insert(nhlSeasons)
+        .values(row)
+        .onConflictDoUpdate({
+          target: nhlSeasons.id,
+          set: {
+            standingsStart: row.standingsStart,
+            standingsEnd: row.standingsEnd,
+          },
+        })
+    }
+
     const url = endpoints.standings.now()
     const { data, raw } = await nhlFetch<NhlStandingsResponse>(url)
 
@@ -28,21 +51,31 @@ export const standingsTask: SyncTask = {
     let upserted = 0
     const today = new Date().toISOString().slice(0, 10)
 
-    // Mark previous current standings as not current (new snapshot today)
-    await ctx.db
-      .update(nhlStandings)
-      .set({ isCurrent: false })
-      .where(
-        and(
-          eq(nhlStandings.isCurrent, true),
-          ne(nhlStandings.snapshotDate, today),
-        ),
-      )
+    // Only clear isCurrent for the active season's older snapshots.
+    // When a season is complete (today > standingsEnd), its final
+    // standings should keep isCurrent=true.
+    const apiSeasonId = data.standings[0]?.seasonId
+    if (apiSeasonId) {
+      const seasonMeta = seasonData.seasons.find((s) => s.id === apiSeasonId)
+      const seasonStillActive = seasonMeta && today <= seasonMeta.standingsEnd
 
-    // We need team IDs to link standings. The standings response doesn't
-    // include team IDs directly, but the score response does. We build
-    // a lookup from existing teams in the DB, and for any missing teams
-    // we'll create a placeholder that the roster sync will fill in.
+      if (seasonStillActive) {
+        await ctx.db
+          .update(nhlStandings)
+          .set({ isCurrent: false })
+          .where(
+            and(
+              eq(nhlStandings.seasonId, apiSeasonId),
+              eq(nhlStandings.isCurrent, true),
+              ne(nhlStandings.snapshotDate, today),
+            ),
+          )
+      }
+    }
+
+    // The standings response doesn't include team IDs, so we look up
+    // existing teams by abbrev. Teams are seeded by bootstrap on first
+    // startup; any missing teams are skipped here.
     const existingTeams = await ctx.db.select().from(nhlTeams)
     const teamByAbbrev = new Map(existingTeams.map((t) => [t.abbrev, t]))
 
@@ -50,14 +83,13 @@ export const standingsTask: SyncTask = {
       const abbrev = standing.teamAbbrev.default
 
       // Upsert team reference data
-      const teamRow = transformTeamFromStanding(standing)
       const existing = teamByAbbrev.get(abbrev)
 
       if (existing) {
-        // Update metadata but keep the real team ID
+        const teamRow = transformTeamFromStanding(standing, existing.id)
         await ctx.db
           .insert(nhlTeams)
-          .values({ ...teamRow, id: existing.id })
+          .values(teamRow)
           .onConflictDoUpdate({
             target: nhlTeams.id,
             set: {

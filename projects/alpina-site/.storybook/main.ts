@@ -13,7 +13,7 @@ function getAbsolutePath(value: string) {
 }
 const config: StorybookConfig = {
   "stories": [
-    "../src/**/*.mdx",
+    "../src/components/**/*.mdx",
     "../src/**/*.stories.@(js|jsx|mjs|ts|tsx)"
   ],
   "addons": [
@@ -31,7 +31,8 @@ const config: StorybookConfig = {
       return (
         !name.includes('nitro') &&
         !name.includes('fullstack') &&
-        !name.includes('tanstack-start')
+        !name.includes('tanstack-start') &&
+        !name.includes('mdx')
       );
     }),
     optimizeDeps: {

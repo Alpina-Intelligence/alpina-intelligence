@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import scoreFixture from '@/__fixtures__/nhl/score-now.json'
-import { nhlGameGoals, nhlGames, nhlSyncLog } from '@/db/nhl-schema'
+import { nhlGameGoals, nhlGames, nhlPlayers, nhlSyncLog } from '@/db/nhl-schema'
 import type { NhlScoreResponse } from '@/lib/nhl-api/types'
 import { createMockCtx } from './helpers/mock-ctx'
 
@@ -187,5 +187,32 @@ describe('scores task integration', () => {
       taskName: 'scores',
       status: 'success',
     })
+  })
+
+  it('skips goals from players not in the DB', async () => {
+    const { scoresTask } = await import('../scores')
+    const gameWithGoals = fixtureData.games.find(
+      (g) => g.goals && g.goals.length > 0,
+    )
+    if (!gameWithGoals) return
+
+    mockNhlFetch.mockResolvedValue({
+      data: { ...fixtureData, games: [gameWithGoals] },
+      raw: '{}',
+    })
+
+    // Provide an empty player list — no player IDs are "known"
+    const { ctx, insertsFor } = createMockCtx({
+      selectData: new Map([[nhlPlayers, []]]),
+    })
+
+    await scoresTask.run(ctx)
+
+    // Game should still be upserted, but no goals
+    const gameInserts = insertsFor(nhlGames)
+    expect(gameInserts).toHaveLength(1)
+
+    const goalInserts = insertsFor(nhlGameGoals)
+    expect(goalInserts).toHaveLength(0)
   })
 })

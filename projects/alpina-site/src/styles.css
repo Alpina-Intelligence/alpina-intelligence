@@ -177,10 +177,10 @@
   /* Dense grid for terminal displays */
   .grid-command {
     background:
-      linear-gradient(to right, oklch(0.15 0.004 270 / 0.5) 1px, transparent 1px),
-      linear-gradient(to bottom, oklch(0.15 0.004 270 / 0.5) 1px, transparent 1px),
-      linear-gradient(to right, oklch(0.18 0.005 270 / 0.2) 1px, transparent 1px),
-      linear-gradient(to bottom, oklch(0.18 0.005 270 / 0.2) 1px, transparent 1px);
+      linear-gradient(to right, oklch(0.22 0.004 270 / 0.5) 1px, transparent 1px),
+      linear-gradient(to bottom, oklch(0.22 0.004 270 / 0.5) 1px, transparent 1px),
+      linear-gradient(to right, oklch(0.28 0.005 270 / 0.2) 1px, transparent 1px),
+      linear-gradient(to bottom, oklch(0.28 0.005 270 / 0.2) 1px, transparent 1px);
     background-size:
       24px 24px,
       24px 24px,
@@ -304,7 +304,7 @@
   }
 
   /* Refined multi-layer glow - amber */
-  .glow-crimson {
+  .glow-amber {
     box-shadow:
       0 0 0 1px oklch(0.65 0.2 45 / 0.2),
       0 0 12px oklch(0.65 0.2 45 / 0.3),
@@ -409,6 +409,43 @@
 
   .hover-lift:hover {
     transform: translateY(-4px);
+  }
+
+  /* Blog prose container */
+  .prose-retro {
+    max-width: 65ch;
+    font-family: var(--font-body);
+    font-size: var(--text-body);
+    line-height: 1.7;
+    color: var(--foreground-muted);
+  }
+
+  .prose-retro > :first-child {
+    margin-top: 0;
+  }
+
+  .prose-retro > :last-child {
+    margin-bottom: 0;
+  }
+
+  .prose-retro pre code {
+    display: grid;
+  }
+
+  .prose-retro pre code > [data-line] {
+    padding: 0 1rem;
+    border-left: 2px solid transparent;
+  }
+
+  .prose-retro pre code > [data-highlighted-line] {
+    background: oklch(0.65 0.2 45 / 0.08);
+    border-left-color: var(--primary);
+  }
+
+  .prose-retro pre [data-highlighted-chars] {
+    background: oklch(0.65 0.2 45 / 0.15);
+    border-radius: 2px;
+    padding: 0.125rem 0.25rem;
   }
 
   /* Legacy utilities for compatibility */

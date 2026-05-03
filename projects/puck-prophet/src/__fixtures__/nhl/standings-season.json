@@ -1,0 +1,32 @@
+{
+  "currentDate": "2026-03-22",
+  "seasons": [
+    {
+      "id": 20232024,
+      "standingsStart": "2023-10-10",
+      "standingsEnd": "2024-04-18",
+      "conferencesInUse": true,
+      "divisionsInUse": true,
+      "wildcardInUse": true,
+      "tiesInUse": false
+    },
+    {
+      "id": 20242025,
+      "standingsStart": "2024-10-04",
+      "standingsEnd": "2025-04-17",
+      "conferencesInUse": true,
+      "divisionsInUse": true,
+      "wildcardInUse": true,
+      "tiesInUse": false
+    },
+    {
+      "id": 20252026,
+      "standingsStart": "2025-10-07",
+      "standingsEnd": "2026-03-22",
+      "conferencesInUse": true,
+      "divisionsInUse": true,
+      "wildcardInUse": true,
+      "tiesInUse": false
+    }
+  ]
+}

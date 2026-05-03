@@ -17,7 +17,6 @@ import {
 import { endpoints, NhlApiError, nhlFetch } from '@/lib/nhl-api'
 import {
   currentSeasonId,
-  isGoalieSeasonTotal,
   nhlSeasonTotals,
   transformGame,
   transformGoal,
@@ -35,6 +34,7 @@ import type {
   NhlRosterResponse,
   NhlScoreResponse,
   NhlStandingsResponse,
+  NhlStandingsSeasonResponse,
   NhlStatsRestResponse,
   NhlTeamListEntry,
 } from '@/lib/nhl-api/types'
@@ -45,6 +45,11 @@ import {
   SKATER_REPORTS,
 } from './advanced-stats-config'
 import { batchProcess } from './batch'
+import {
+  bootstrapSeasons,
+  bootstrapTeams,
+  extractCommonName,
+} from './bootstrap'
 import { NHL_TEAMS } from './tasks/rosters'
 
 // ---------------------------------------------------------------------------
@@ -96,91 +101,16 @@ function elapsed(startMs: number): string {
 // Phase 1: Teams (from NHL stats API)
 // ---------------------------------------------------------------------------
 async function backfillTeams(_seasons: number[]): Promise<number> {
-  console.log('\n[backfill] Phase 1: Teams (from NHL teams API)')
+  console.log('\n[backfill] Phase 1: Teams + Seasons')
   const start = Date.now()
 
-  const { data } = await nhlFetch<NhlStatsRestResponse<NhlTeamListEntry>>(
-    endpoints.team.list(),
-  )
-
-  // Deduplicate by triCode — keep highest ID (most recent franchise)
-  const byCode = new Map<string, NhlTeamListEntry>()
-  for (const team of data.data) {
-    const existing = byCode.get(team.triCode)
-    if (!existing || team.id > existing.id) {
-      byCode.set(team.triCode, team)
-    }
-  }
-
-  let total = 0
-  for (const team of byCode.values()) {
-    await db
-      .insert(nhlTeams)
-      .values({
-        id: team.id,
-        abbrev: team.triCode,
-        name: team.fullName, // Overwritten with proper short name by Phase 2 (standings)
-        fullName: team.fullName,
-      })
-      .onConflictDoUpdate({
-        target: nhlTeams.id,
-        set: {
-          abbrev: team.triCode,
-          name: team.fullName,
-          fullName: team.fullName,
-        },
-      })
-    total++
-  }
-
-  console.log(`[backfill] teams: ${total} teams from API`)
-
-  // Stamp current conference/division from today's standings
-  const { data: standingsData } = await nhlFetch<NhlStandingsResponse>(
-    endpoints.standings.now(),
-  )
-
-  let stamped = 0
-  for (const standing of standingsData.standings) {
-    const abbrev = standing.teamAbbrev.default
-    const teamEntry = byCode.get(abbrev)
-    if (!teamEntry) continue
-
-    await db
-      .insert(nhlTeams)
-      .values({
-        id: teamEntry.id,
-        abbrev,
-        name: standing.teamCommonName.default,
-        fullName: standing.teamName.default,
-        conference: standing.conferenceName,
-        conferenceAbbrev: standing.conferenceAbbrev,
-        division: standing.divisionName,
-        divisionAbbrev: standing.divisionAbbrev,
-        logoUrl: standing.teamLogo,
-      })
-      .onConflictDoUpdate({
-        target: nhlTeams.id,
-        set: {
-          name: standing.teamCommonName.default,
-          fullName: standing.teamName.default,
-          conference: standing.conferenceName,
-          conferenceAbbrev: standing.conferenceAbbrev,
-          division: standing.divisionName,
-          divisionAbbrev: standing.divisionAbbrev,
-          logoUrl: standing.teamLogo,
-        },
-      })
-    stamped++
-  }
+  const total = await bootstrapTeams(db)
+  const seasonCount = await bootstrapSeasons(db)
 
   console.log(
-    `[backfill] teams: ${stamped} teams stamped with current conference/division`,
+    `[backfill] Phase 1 done: ${total} teams, ${seasonCount} seasons in ${elapsed(start)}`,
   )
-  console.log(
-    `[backfill] Phase 1 done: ${total} teams upserted in ${elapsed(start)}`,
-  )
-  return total
+  return total + seasonCount
 }
 
 // ---------------------------------------------------------------------------
@@ -259,10 +189,10 @@ async function enrichTeamsFromStandings(
   for (const standing of data.standings) {
     const team = teamByAbbrev.get(standing.teamAbbrev.default)
     if (!team) continue
-    const teamRow = transformTeamFromStanding(standing)
+    const teamRow = transformTeamFromStanding(standing, team.id)
     await db
       .insert(nhlTeams)
-      .values({ ...teamRow, id: team.id })
+      .values(teamRow)
       .onConflictDoUpdate({
         target: nhlTeams.id,
         set: {
@@ -285,6 +215,15 @@ async function backfillStandings(seasons: number[]): Promise<number> {
   )
   const start = Date.now()
   let total = 0
+
+  // Fetch season end dates from the standings-season API
+  const { data: standingsSeasonData } =
+    await nhlFetch<NhlStandingsSeasonResponse>(
+      endpoints.season.standingsSeason(),
+    )
+  const seasonEndDates = new Map(
+    standingsSeasonData.seasons.map((s) => [s.id, s.standingsEnd]),
+  )
 
   // Build team lookup once
   const existingTeams = await db.select().from(nhlTeams)
@@ -374,23 +313,21 @@ async function backfillStandings(seasons: number[]): Promise<number> {
           `[backfill] standings: ${seasonLabel(season)} (${i + 1}/${seasons.length}) — ${dateCount} dates, ${seasonCount} standings`,
         )
       } else {
-        // --- Single date mode: end-of-season only ---
-        let data: NhlStandingsResponse | null = null
-        let snapshotDate = ''
-        for (const day of [15, 12, 8, 5, 1]) {
-          const date = `${endYear}-04-${String(day).padStart(2, '0')}`
-          const resp = await delayedFetch<NhlStandingsResponse>(
-            endpoints.standings.byDate(date),
+        // --- Single date mode: use actual season end date ---
+        const endDate = seasonEndDates.get(season)
+        if (!endDate) {
+          console.warn(
+            `[backfill] standings: ${seasonLabel(season)} — no standings-season data, skipping`,
           )
-          if (resp.data.standings.length > 0) {
-            data = resp.data
-            snapshotDate = date
-            break
-          }
+          continue
         }
+
+        const { data } = await delayedFetch<NhlStandingsResponse>(
+          endpoints.standings.byDate(endDate),
+        )
         if (!data || data.standings.length === 0) {
           console.warn(
-            `[backfill] standings: ${seasonLabel(season)} — no standings found, skipping`,
+            `[backfill] standings: ${seasonLabel(season)} — no standings at ${endDate}, skipping`,
           )
           continue
         }
@@ -398,7 +335,7 @@ async function backfillStandings(seasons: number[]): Promise<number> {
         await enrichTeamsFromStandings(data, teamByAbbrev)
         seasonCount = await upsertStandingsForDate(
           data,
-          snapshotDate,
+          endDate,
           teamByAbbrev,
           true, // single date = current
         )
@@ -532,7 +469,7 @@ async function backfillPlayerStats(): Promise<number> {
       // Use end-of-season as snapshot date for backfill data
       const endYear = st.season % 10000
       const snapshotDate = `${endYear}-04-15`
-      const isGoalie = isGoalieSeasonTotal(st)
+      const isGoalie = player.position === 'G'
       if (isGoalie) {
         const row = transformGoalieSeasonStats(player.id, st, snapshotDate)
         await db
@@ -1135,6 +1072,81 @@ async function backfillAdvancedStats(seasons: number[]): Promise<number> {
 }
 
 // ---------------------------------------------------------------------------
+// Phase 7: Repair (fix data inconsistencies in existing DB)
+// ---------------------------------------------------------------------------
+async function repairData(): Promise<number> {
+  console.log('\n[backfill] Repair: Fixing team names and metadata')
+  const start = Date.now()
+  let fixed = 0
+
+  // Re-fetch the team list from the stats API
+  const { data } = await nhlFetch<NhlStatsRestResponse<NhlTeamListEntry>>(
+    endpoints.team.list(),
+  )
+  const byCode = new Map<string, NhlTeamListEntry>()
+  for (const team of data.data) {
+    const existing = byCode.get(team.triCode)
+    if (!existing || team.id > existing.id) {
+      byCode.set(team.triCode, team)
+    }
+  }
+
+  // Fetch current standings to identify active teams
+  const { data: standingsData } = await nhlFetch<NhlStandingsResponse>(
+    endpoints.standings.now(),
+  )
+  const activeAbbrevs = new Set(
+    standingsData.standings.map((s) => s.teamAbbrev.default),
+  )
+
+  // Re-stamp active teams from standings
+  for (const standing of standingsData.standings) {
+    const abbrev = standing.teamAbbrev.default
+    const teamEntry = byCode.get(abbrev)
+    if (!teamEntry) continue
+
+    await db
+      .update(nhlTeams)
+      .set({
+        name: standing.teamCommonName.default,
+        fullName: standing.teamName.default,
+        conference: standing.conferenceName,
+        conferenceAbbrev: standing.conferenceAbbrev,
+        division: standing.divisionName,
+        divisionAbbrev: standing.divisionAbbrev,
+        logoUrl: standing.teamLogo,
+      })
+      .where(eq(nhlTeams.id, teamEntry.id))
+    console.log(
+      `[repair] team ${abbrev}: name="${standing.teamCommonName.default}", fullName="${standing.teamName.default}"`,
+    )
+    fixed++
+  }
+
+  // Fix defunct teams: extract common name from fullName
+  const allTeams = await db.select().from(nhlTeams)
+  for (const team of allTeams) {
+    if (activeAbbrevs.has(team.abbrev)) continue
+    if (team.name !== team.fullName) continue // already has distinct names
+
+    const commonName = extractCommonName(team.fullName)
+    if (commonName !== team.name) {
+      await db
+        .update(nhlTeams)
+        .set({ name: commonName })
+        .where(eq(nhlTeams.id, team.id))
+      console.log(
+        `[repair] team ${team.abbrev}: "${team.name}" → "${commonName}"`,
+      )
+      fixed++
+    }
+  }
+
+  console.log(`[backfill] Repair done: ${fixed} fixes in ${elapsed(start)}`)
+  return fixed
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 const PHASES = [
@@ -1145,6 +1157,7 @@ const PHASES = [
   'game-logs',
   'scores',
   'advanced',
+  'repair',
 ] as const
 type Phase = (typeof PHASES)[number]
 
@@ -1220,6 +1233,11 @@ async function main() {
   if (shouldRun('advanced')) {
     const n = await backfillAdvancedStats(seasons)
     summary.push({ phase: 'advanced', records: n })
+  }
+
+  if (shouldRun('repair')) {
+    const n = await repairData()
+    summary.push({ phase: 'repair', records: n })
   }
 
   // Final summary

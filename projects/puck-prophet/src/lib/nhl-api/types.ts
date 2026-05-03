@@ -543,6 +543,24 @@ export interface NhlGoalieSavesByStrengthRow {
 }
 
 // ---------------------------------------------------------------------------
+// v1/standings-season
+// ---------------------------------------------------------------------------
+export interface NhlStandingsSeasonResponse {
+  currentDate: string
+  seasons: NhlSeasonEntry[]
+}
+
+export interface NhlSeasonEntry {
+  id: number
+  standingsStart: string
+  standingsEnd: string
+  conferencesInUse: boolean
+  divisionsInUse: boolean
+  wildcardInUse: boolean
+  tiesInUse: boolean
+}
+
+// ---------------------------------------------------------------------------
 // v1/schedule/now
 // ---------------------------------------------------------------------------
 export interface NhlScheduleResponse {

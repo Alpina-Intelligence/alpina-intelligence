@@ -300,6 +300,13 @@ const mutation = useMutation({
 - Invalidate related queries after mutations
 - Use `refetchInterval` for polling instead of `setInterval` + `router.invalidate()`
 
+### TanStack Start Framework Gotchas
+
+- **No RSC support yet.** Don't use `'use client'` or `'use server'` directives — they're not recognized.
+- **Use `useId()` for form field IDs** to avoid SSR hydration mismatches; never hardcode IDs.
+- **Server functions must return plain serializable data.** `db.execute()` returns a pg `Result` object that crashes seroval — extract `.rows` before returning.
+- **Loader data must be serializable** (no React components, functions, or class instances). For non-serializable data like MDX components, access them directly in the route component via eager `import.meta.glob` — not through the loader. This preserves SSR without `useEffect` hacks.
+
 ### Card Styling by Theme
 
 Cards should feel different per theme:

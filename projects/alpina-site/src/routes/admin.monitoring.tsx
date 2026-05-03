@@ -45,7 +45,7 @@ function MonitoringPage() {
 						<GameStateIndicator
 							state={engineState?.gameState ?? null}
 						/>
-						<span className="text-border">|</span>
+						<span className="text-foreground-subtle">|</span>
 						<span className="font-mono text-[10px] text-foreground-subtle uppercase tracking-wide">
 							Uptime:{" "}
 							<span className="data-value">

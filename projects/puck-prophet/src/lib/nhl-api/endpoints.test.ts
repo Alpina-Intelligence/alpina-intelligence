@@ -165,4 +165,10 @@ describe("season endpoints", () => {
 			"https://api-web.nhle.com/v1/season",
 		);
 	});
+
+	it("builds standings-season URL", () => {
+		expect(ep.season.standingsSeason()).toBe(
+			"https://api-web.nhle.com/v1/standings-season",
+		);
+	});
 });
