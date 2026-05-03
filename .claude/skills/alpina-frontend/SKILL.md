@@ -1,6 +1,6 @@
 ---
 name: alpina-frontend
-description: Build distinctive frontend interfaces for alpina-intelligence projects using shadcn/ui, Tailwind CSS v4, and TanStack Start. Use this skill when creating pages, components, themes, or any UI work. Ensures proper typography with Google Fonts, CSS variable theming, and avoids generic AI aesthetics.
+description: Build distinctive frontend interfaces for alpina-intelligence projects using shadcn/ui, Tailwind CSS v4, and the TanStack stack (Start or Router). Use this skill when creating pages, components, themes, or any UI work. Ensures proper typography with Google Fonts, CSS variable theming, and avoids generic AI aesthetics.
 allowed-tools: mcp__shadcn__search_items_in_registries, mcp__shadcn__view_items_in_registries, mcp__shadcn__get_item_examples_from_registries, mcp__shadcn__get_add_command_for_items
 ---
 
@@ -19,11 +19,29 @@ Use this skill when:
 - Styling existing components
 - Any frontend/UI work in this monorepo
 
+## Pick Your TanStack Flavor
+
+Frontend projects use one of two TanStack flavors. Pick based on the project's needs:
+
+| Project type | Use | Why |
+| --- | --- | --- |
+| SEO-driven content site (marketing, blog, docs) | **TanStack Start** | SSR for crawlability and first-paint |
+| SPA bound for PWA / Capacitor / native | **TanStack Router** (no Start) | Static client bundle, no Node runtime required |
+| Internal tools, dashboards behind auth | Either; default Router | SEO doesn't matter; SPA is simpler |
+
+Most rules in this skill apply to both flavors. Framework-specific items are clearly marked **Start-only** or **Router-only**.
+
+| Project | Flavor |
+| --- | --- |
+| `projects/alpina-site` | TanStack Start |
+| `projects/puck-prophet` | TanStack Start |
+| `projects/ebook/frontend` (planned) | TanStack Router |
+
 ## Tech Stack
 
 | Technology | Purpose |
 | ------------ | --------- |
-| **TanStack Start** | Full-stack React framework with SSR |
+| **TanStack Start** *or* **Router** | See "Pick Your TanStack Flavor" above |
 | **Tailwind CSS v4** | Utility-first CSS with `@theme inline` blocks |
 | **shadcn/ui** | Component library consuming CSS variables |
 | **oklch colors** | Perceptually uniform color space |
@@ -300,12 +318,24 @@ const mutation = useMutation({
 - Invalidate related queries after mutations
 - Use `refetchInterval` for polling instead of `setInterval` + `router.invalidate()`
 
-### TanStack Start Framework Gotchas
+### TanStack Start-only Gotchas
+
+Applies only to projects using TanStack Start (SSR + server functions). Skip for pure-Router SPAs.
 
 - **No RSC support yet.** Don't use `'use client'` or `'use server'` directives — they're not recognized.
 - **Use `useId()` for form field IDs** to avoid SSR hydration mismatches; never hardcode IDs.
 - **Server functions must return plain serializable data.** `db.execute()` returns a pg `Result` object that crashes seroval — extract `.rows` before returning.
 - **Loader data must be serializable** (no React components, functions, or class instances). For non-serializable data like MDX components, access them directly in the route component via eager `import.meta.glob` — not through the loader. This preserves SSR without `useEffect` hacks.
+
+### TanStack Router-only Patterns
+
+Applies only to projects using plain TanStack Router (SPA, no Start). The TanStack Query patterns above work identically in both.
+
+- **No SSR, no server functions, no `useId` requirement.** Same API surface as Start minus the server runtime.
+- **Talk to a remote API.** All data calls go through `fetch` (typically wrapped in `queryOptions`) to a separate hosted backend — never import `@/db` or server-only code into route files. For new full-stack products, the backend lives at `projects/<product>/backend/`.
+- **Configure the API base URL via env.** Use `VITE_API_URL` (or similar `VITE_*` prefix) so the same client bundle works in dev, deployed web, PWA, and Capacitor.
+- **`createLink()` for typed nav-as-button.** When a shadcn `Button` or `NavigationMenuItem` should navigate, wrap it with `createLink()` from `@tanstack/react-router` to get type-safe `to`/`params`/`search` props instead of raw `<a>` tags.
+- **Defer the Sheet/Dialog portal-root pattern.** TanStack Router's docs describe a `<div id="portal-root">` + `RouterSheet`/`RouterDialog` wrapper pattern to fix Radix portal animation glitches on route transitions. **Don't add this preemptively** — only wire it up if you actually observe an animation issue (e.g., a Link inside an open Dialog). For most apps, raw shadcn `Dialog`/`Sheet` work fine.
 
 ### Card Styling by Theme
 
