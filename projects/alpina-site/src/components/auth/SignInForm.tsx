@@ -1,4 +1,6 @@
-import { useId, useState } from "react";
+import { useId } from "react";
+import { Controller, useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -8,13 +10,11 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { type SignInData, signInSchema } from "@/lib/schemas/auth";
 
-export interface SignInData {
-	email: string;
-	password: string;
-}
+export type { SignInData };
 
 interface SignInFormProps {
 	onSubmit: (data: SignInData) => void;
@@ -24,13 +24,10 @@ interface SignInFormProps {
 
 export function SignInForm({ onSubmit, error, loading }: SignInFormProps) {
 	const id = useId();
-	const [email, setEmail] = useState("");
-	const [password, setPassword] = useState("");
-
-	function handleSubmit(e: React.FormEvent) {
-		e.preventDefault();
-		onSubmit({ email, password });
-	}
+	const form = useForm<SignInData>({
+		resolver: zodResolver(signInSchema),
+		defaultValues: { email: "", password: "" },
+	});
 
 	return (
 		<Card className="w-full max-w-sm">
@@ -40,37 +37,63 @@ export function SignInForm({ onSubmit, error, loading }: SignInFormProps) {
 					Enter your credentials to continue.
 				</CardDescription>
 			</CardHeader>
-			<form onSubmit={handleSubmit}>
-				<CardContent className="flex flex-col gap-4">
-					{error && (
-						<p className="text-xs text-status-error font-mono">
-							{error}
-						</p>
-					)}
-					<div className="flex flex-col gap-1.5">
-						<Label htmlFor={`${id}-email`}>Email</Label>
-						<Input
-							id={`${id}-email`}
-							type="email"
-							placeholder="you@example.com"
-							value={email}
-							onChange={(e) => setEmail(e.target.value)}
-							required
-							disabled={loading}
+			<form onSubmit={form.handleSubmit(onSubmit)}>
+				<CardContent>
+					<FieldGroup>
+						{error && (
+							<p className="text-xs text-status-error font-mono">
+								{error}
+							</p>
+						)}
+						<Controller
+							name="email"
+							control={form.control}
+							render={({ field, fieldState }) => (
+								<Field data-invalid={fieldState.invalid}>
+									<FieldLabel htmlFor={`${id}-email`}>
+										Email
+									</FieldLabel>
+									<Input
+										{...field}
+										id={`${id}-email`}
+										type="email"
+										placeholder="you@example.com"
+										aria-invalid={fieldState.invalid}
+										disabled={loading}
+									/>
+									{fieldState.invalid && (
+										<FieldError
+											errors={[fieldState.error]}
+										/>
+									)}
+								</Field>
+							)}
 						/>
-					</div>
-					<div className="flex flex-col gap-1.5">
-						<Label htmlFor={`${id}-password`}>Password</Label>
-						<Input
-							id={`${id}-password`}
-							type="password"
-							placeholder="••••••••"
-							value={password}
-							onChange={(e) => setPassword(e.target.value)}
-							required
-							disabled={loading}
+						<Controller
+							name="password"
+							control={form.control}
+							render={({ field, fieldState }) => (
+								<Field data-invalid={fieldState.invalid}>
+									<FieldLabel htmlFor={`${id}-password`}>
+										Password
+									</FieldLabel>
+									<Input
+										{...field}
+										id={`${id}-password`}
+										type="password"
+										placeholder="••••••••"
+										aria-invalid={fieldState.invalid}
+										disabled={loading}
+									/>
+									{fieldState.invalid && (
+										<FieldError
+											errors={[fieldState.error]}
+										/>
+									)}
+								</Field>
+							)}
 						/>
-					</div>
+					</FieldGroup>
 				</CardContent>
 				<CardFooter>
 					<Button type="submit" className="w-full" disabled={loading}>

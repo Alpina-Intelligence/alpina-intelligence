@@ -1,10 +1,14 @@
 import { Link } from "@tanstack/react-router";
+import { AlpinaLogo } from "@/components/AlpinaLogo";
 import {
+	Activity,
+	BookOpen,
 	ChevronDown,
 	ChevronRight,
 	Home,
 	Menu,
 	Network,
+	Settings,
 	SquareFunction,
 	StickyNote,
 	X,
@@ -28,11 +32,7 @@ export default function Header() {
 					<div className="flex items-center justify-between h-12">
 						{/* Logo/Brand */}
 						<Link to="/" className="flex items-center gap-2 group">
-							<div className="w-7 h-7 rounded-[2px] bg-primary/15 border border-primary/30 flex items-center justify-center transition-colors group-hover:bg-primary/25 group-hover:border-primary/50">
-								<span className="font-mono font-bold text-primary text-xs">
-									A
-								</span>
-							</div>
+							<AlpinaLogo className="w-7 h-7 text-primary" />
 							<span className="font-mono font-medium tracking-wider text-foreground text-sm uppercase">
 								Alpina
 							</span>
@@ -41,10 +41,12 @@ export default function Header() {
 						{/* Desktop nav links */}
 						<nav className="hidden md:flex items-center gap-1">
 							<NavLink to="/">Platform</NavLink>
-							<span className="text-border px-2">|</span>
-							<NavLink to="/">Docs</NavLink>
-							<span className="text-border px-2">|</span>
-							<NavLink to="/">About</NavLink>
+							<span className="text-foreground-subtle px-2">|</span>
+							<NavLink to="/blog">Blog</NavLink>
+							<span className="text-foreground-subtle px-2">|</span>
+							<NavLink to="/admin/monitoring">Monitoring</NavLink>
+							<span className="text-foreground-subtle px-2">|</span>
+							<NavLink to="/admin/configuration">Config</NavLink>
 						</nav>
 
 						{/* Actions */}
@@ -61,14 +63,15 @@ export default function Header() {
 							</Button>
 
 							{/* Mobile menu trigger */}
-							<button
-								type="button"
+							<Button
+								variant="ghost"
+								size="icon"
 								onClick={() => setIsOpen(true)}
-								className="md:hidden p-1.5 -mr-1.5 text-foreground-muted hover:text-foreground transition-colors"
+								className="md:hidden h-7 w-7 text-foreground-muted hover:text-foreground"
 								aria-label="Open menu"
 							>
 								<Menu className="w-4 h-4" />
-							</button>
+							</Button>
 						</div>
 					</div>
 				</div>
@@ -82,14 +85,15 @@ export default function Header() {
 			>
 				<div className="flex items-center justify-between p-3 border-b border-border">
 					<h2 className="font-mono text-xs font-medium uppercase tracking-wider text-foreground-muted">// Navigation</h2>
-					<button
-						type="button"
+					<Button
+						variant="ghost"
+						size="icon"
 						onClick={() => setIsOpen(false)}
-						className="p-1.5 hover:bg-secondary rounded-[2px] transition-colors text-foreground-muted hover:text-foreground"
+						className="h-7 w-7 text-foreground-muted hover:text-foreground"
 						aria-label="Close menu"
 					>
 						<X size={16} />
-					</button>
+					</Button>
 				</div>
 
 				<nav className="flex-1 p-3 overflow-y-auto">
@@ -99,6 +103,37 @@ export default function Header() {
 						onClick={() => setIsOpen(false)}
 					>
 						Home
+					</SidebarLink>
+
+					<SidebarLink
+						to="/blog"
+						icon={<BookOpen size={14} />}
+						onClick={() => setIsOpen(false)}
+					>
+						Blog
+					</SidebarLink>
+
+					{/* Admin Links */}
+					<div className="mt-4 mb-2">
+						<span className="font-mono text-[10px] uppercase tracking-ultra text-foreground-subtle px-2">
+							// Admin
+						</span>
+					</div>
+
+					<SidebarLink
+						to="/admin/monitoring"
+						icon={<Activity size={14} />}
+						onClick={() => setIsOpen(false)}
+					>
+						Monitoring
+					</SidebarLink>
+
+					<SidebarLink
+						to="/admin/configuration"
+						icon={<Settings size={14} />}
+						onClick={() => setIsOpen(false)}
+					>
+						Configuration
 					</SidebarLink>
 
 					{/* Demo Links */}
@@ -133,9 +168,10 @@ export default function Header() {
 						>
 							SSR Demos
 						</SidebarLink>
-						<button
-							type="button"
-							className="p-1.5 hover:bg-secondary rounded-[2px] transition-colors text-foreground-muted hover:text-foreground"
+						<Button
+							variant="ghost"
+							size="icon"
+							className="h-7 w-7 text-foreground-muted hover:text-foreground"
 							onClick={() =>
 								setGroupedExpanded((prev) => ({
 									...prev,
@@ -148,7 +184,7 @@ export default function Header() {
 							) : (
 								<ChevronRight size={12} />
 							)}
-						</button>
+						</Button>
 					</div>
 
 					{groupedExpanded.StartSSRDemo && (

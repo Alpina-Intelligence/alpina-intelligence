@@ -1,0 +1,49 @@
+---
+title: "Introducing Alpina Intelligence"
+date: "2026-04-03"
+description: "Our first transmission — an overview of the platform architecture and what we are building."
+tags: ["announcement", "platform", "analytics"]
+---
+
+The Alpina Intelligence Platform is a system for hockey analytics and predictive modeling. This is our first public transmission.
+
+## What We Are Building
+
+Alpina combines several data pipelines and ML models into a unified analytical platform:
+
+- **Player Analysis** -- deep statistical breakdowns tracking trends across seasons
+- **Predictive Models** -- ML models trained on historical data to forecast outcomes
+- **Strategic Insights** -- actionable intelligence from advanced metrics
+
+The core idea is simple: take the enormous volume of publicly available hockey data and transform it into something useful.
+
+## Technical Foundation
+
+The platform is built on modern web infrastructure. Here is an example of how we define routes with server-side data loading:
+
+```typescript
+export const Route = createFileRoute("/analysis/$playerId")({
+  loader: async ({ params }) => {
+    return fetchPlayerStats(params.playerId);
+  },
+  component: PlayerAnalysis,
+});
+```
+
+Data flows from NHL APIs through our sync engine, gets processed by our statistical models, and surfaces through this interface.
+
+> The best tools are the ones that get out of your way and let you focus on the questions that matter.
+
+## What Comes Next
+
+We will be publishing technical deep-dives on:
+
+1. The sync engine architecture and its real-time data pipeline
+2. Our approach to predictive modeling for hockey outcomes
+3. Advanced statistics methodology and validation
+
+Stay tuned for more transmissions.
+
+---
+
+*Alpina Intelligence Platform v2.0 -- System Online*

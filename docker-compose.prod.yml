@@ -15,12 +15,33 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./scripts/init-databases.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 5
 
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v3.1.0
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5000:5000"  # Only localhost, Cloudflare tunnel routes external traffic
+    environment:
+      MLFLOW_BACKEND_STORE_URI: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/mlflow
+      MLFLOW_ARTIFACTS_DESTINATION: /mlflow/artifacts
+    volumes:
+      - mlflow_artifacts:/mlflow/artifacts
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >
+      bash -c "pip install --no-cache-dir psycopg2-binary &&
+      mlflow server
+      --host 0.0.0.0
+      --port 5000
+      --backend-store-uri postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/mlflow
+      --artifacts-destination /mlflow/artifacts"
+
 volumes:
   postgres_data:
+  mlflow_artifacts:

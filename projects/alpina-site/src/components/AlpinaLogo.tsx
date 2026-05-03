@@ -1,0 +1,66 @@
+export function AlpinaLogo(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="60 45 880 510" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+      <defs>
+        <filter id="logo-glow">
+          <feGaussianBlur stdDeviation="6" result="blur1"/>
+          <feGaussianBlur stdDeviation="14" result="blur2"/>
+          <feMerge>
+            <feMergeNode in="blur2"/>
+            <feMergeNode in="blur1"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+        <filter id="logo-dot-glow">
+          <feGaussianBlur stdDeviation="4" result="blur"/>
+          <feMerge>
+            <feMergeNode in="blur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+      </defs>
+
+      <g filter="url(#logo-glow)" stroke="currentColor" strokeWidth="5" strokeLinecap="round">
+        <line x1="500" y1="86" x2="352" y2="322"/>
+        <line x1="500" y1="86" x2="644" y2="314"/>
+        <line x1="500" y1="86" x2="606" y2="364"/>
+        <line x1="500" y1="86" x2="336" y2="520"/>
+        <line x1="500" y1="86" x2="665" y2="520"/>
+        <line x1="276" y1="219" x2="352" y2="322"/>
+        <line x1="276" y1="219" x2="276" y2="370"/>
+        <line x1="276" y1="219" x2="100" y2="519"/>
+        <line x1="717" y1="208" x2="644" y2="314"/>
+        <line x1="717" y1="208" x2="606" y2="364"/>
+        <line x1="717" y1="208" x2="708" y2="401"/>
+        <line x1="717" y1="208" x2="900" y2="520"/>
+        <line x1="352" y1="322" x2="276" y2="370"/>
+        <line x1="644" y1="314" x2="606" y2="364"/>
+        <line x1="644" y1="314" x2="708" y2="401"/>
+        <line x1="276" y1="370" x2="100" y2="519"/>
+        <line x1="276" y1="370" x2="336" y2="520"/>
+        <line x1="606" y1="364" x2="336" y2="520"/>
+        <line x1="606" y1="364" x2="665" y2="520"/>
+        <line x1="708" y1="401" x2="665" y2="520"/>
+        <line x1="708" y1="401" x2="900" y2="520"/>
+        <line x1="100" y1="519" x2="336" y2="520"/>
+        <line x1="336" y1="520" x2="665" y2="520"/>
+        <line x1="665" y1="520" x2="900" y2="520"/>
+      </g>
+
+      <g filter="url(#logo-dot-glow)" fill="currentColor">
+        <circle cx="500" cy="86" r="12"/>
+        <circle cx="276" cy="219" r="12"/>
+        <circle cx="717" cy="208" r="12"/>
+        <circle cx="352" cy="322" r="12"/>
+        <circle cx="644" cy="314" r="12"/>
+        <circle cx="276" cy="370" r="12"/>
+        <circle cx="606" cy="364" r="12"/>
+        <circle cx="708" cy="401" r="12"/>
+        <circle cx="100" cy="519" r="12"/>
+        <circle cx="336" cy="520" r="12"/>
+        <circle cx="665" cy="520" r="12"/>
+        <circle cx="900" cy="520" r="12"/>
+      </g>
+    </svg>
+  );
+}

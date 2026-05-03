@@ -7,3 +7,6 @@ CREATE DATABASE alpina;
 
 -- Puck Prophet project
 CREATE DATABASE puck_prophet;
+
+-- MLflow tracking server
+CREATE DATABASE mlflow;

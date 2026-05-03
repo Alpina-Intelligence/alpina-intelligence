@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { AlpinaLogo } from "@/components/AlpinaLogo";
 import { ArrowRight, Brain, ChevronRight, Crosshair, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -54,7 +55,7 @@ function HomePage() {
 									<span className="status-dot status-dot-pulse text-status-active" />
 									<span className="text-foreground-subtle">System Online</span>
 								</span>
-								<span className="text-border">|</span>
+								<span className="text-foreground-subtle">|</span>
 								<span className="text-foreground-subtle">
 									Session: <span className="text-primary">ALP-2024-001</span>
 								</span>
@@ -63,9 +64,10 @@ function HomePage() {
 							{/* Headline */}
 							<h1 className="mb-3">
 								<span
-									className="block font-display font-bold text-foreground text-glow tracking-tight"
+									className="flex items-center gap-4 font-display font-bold text-foreground text-glow tracking-tight"
 									style={{ fontSize: "var(--text-display)" }}
 								>
+									<AlpinaLogo className="h-16 w-auto text-primary" />
 									ALPINA
 								</span>
 								<span className="block font-mono text-xs uppercase tracking-ultra text-primary mt-1">

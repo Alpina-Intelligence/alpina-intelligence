@@ -199,6 +199,114 @@ Use data attributes for theme switching:
 3. **Don't modify installed components** - they update from the registry
 4. **Extend with wrapper components** if customization needed
 
+### Form Element Rules
+
+**Always use shadcn/ui components instead of native HTML elements:**
+
+| Native Element | shadcn Replacement | Import |
+| -------------- | ------------------ | ------ |
+| `<input>` | `<Input>` | `@/components/ui/input` |
+| `<button>` | `<Button>` | `@/components/ui/button` |
+| `<label>` | `<Label>` | `@/components/ui/label` |
+| `<select>` | `<Select>` (Radix) | `@/components/ui/select` |
+| checkbox | `<Switch>` or `<Checkbox>` | `@/components/ui/switch` |
+
+**Why not native elements?** Native form elements render browser-chrome UI (dropdown popups, spinners, checkboxes) that ignores CSS theming. In dark themes, this means white backgrounds, blue highlights, and grey spinners.
+
+**Select components:** Use `Select`/`SelectTrigger`/`SelectContent`/`SelectItem` from `@/components/ui/select` (Radix-based). Do NOT use `NativeSelect` — it wraps a native `<select>` whose dropdown popup cannot be styled.
+
+**Number inputs:** Use `type="text"` with `inputMode="decimal"` and regex filtering instead of `type="number"`:
+- `type="number"` shows unstyled browser spinners and has quirky backspace behavior (leading zeros)
+- Hide spinners: `[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none`
+- Filter input with regex: `if (raw !== "" && !/^\d*\.?\d*$/.test(raw)) return;`
+- Reset to original value on blur if empty/invalid
+
+### Form Validation (react-hook-form + zod)
+
+All forms use react-hook-form with zod schemas and shadcn `Field` layout components.
+
+**Standard pattern:**
+```tsx
+import { Controller, useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { mySchema, type MyData } from "@/lib/schemas/my-schema";
+
+const form = useForm<MyData>({
+  resolver: zodResolver(mySchema),
+  defaultValues: { ... },
+});
+
+<form onSubmit={form.handleSubmit(onSubmit)}>
+  <FieldGroup>
+    <Controller
+      name="fieldName"
+      control={form.control}
+      render={({ field, fieldState }) => (
+        <Field data-invalid={fieldState.invalid}>
+          <FieldLabel htmlFor="field-id">Label</FieldLabel>
+          <Input {...field} id="field-id" aria-invalid={fieldState.invalid} />
+          {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+        </Field>
+      )}
+    />
+  </FieldGroup>
+</form>
+```
+
+**Key rules:**
+- Define zod schemas in `src/lib/schemas/` — reuse in both client forms and server function `inputValidator`
+- Use `Controller` from react-hook-form (not `register`) for shadcn components
+- Wrap fields in `Field`/`FieldLabel`/`FieldError` from `@/components/ui/field`
+- Set `data-invalid` on `Field` and `aria-invalid` on inputs for styling
+- Server function validators: `.inputValidator((d: unknown) => schema.parse(d))`
+
+### Data Fetching (TanStack Query)
+
+All data fetching uses TanStack Query with `queryOptions()` helpers defined in `src/lib/queries/`.
+
+**Route loader + component pattern:**
+```tsx
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { createFileRoute } from "@tanstack/react-router";
+import { myQuery } from "@/lib/queries/my-domain";
+
+export const Route = createFileRoute("/my-route")({
+  loader: ({ context }) => context.queryClient.ensureQueryData(myQuery()),
+  component: MyPage,
+});
+
+function MyPage() {
+  const { data } = useSuspenseQuery(myQuery());
+  // ...
+}
+```
+
+**Mutations:**
+```tsx
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+
+const queryClient = useQueryClient();
+const mutation = useMutation({
+  mutationFn: (data) => updateSomething({ data }),
+  onSuccess: () => queryClient.invalidateQueries({ queryKey: myKeys.all }),
+});
+```
+
+**Key rules:**
+- Define query key factories per domain in `src/lib/queries/`
+- Use `ensureQueryData` in loaders (SSR-safe), `useSuspenseQuery` in components
+- Use `useMutation` for writes — provides `isPending`/`isError` states
+- Invalidate related queries after mutations
+- Use `refetchInterval` for polling instead of `setInterval` + `router.invalidate()`
+
+### TanStack Start Framework Gotchas
+
+- **No RSC support yet.** Don't use `'use client'` or `'use server'` directives — they're not recognized.
+- **Use `useId()` for form field IDs** to avoid SSR hydration mismatches; never hardcode IDs.
+- **Server functions must return plain serializable data.** `db.execute()` returns a pg `Result` object that crashes seroval — extract `.rows` before returning.
+- **Loader data must be serializable** (no React components, functions, or class instances). For non-serializable data like MDX components, access them directly in the route component via eager `import.meta.glob` — not through the loader. This preserves SSR without `useEffect` hacks.
+
 ### Card Styling by Theme
 
 Cards should feel different per theme:
@@ -234,6 +342,14 @@ Before finishing any frontend work, verify:
 - [ ] All shadcn color tokens defined
 - [ ] Theme switching actually changes fonts (test it!)
 - [ ] Visual design is distinctive, not generic
+- [ ] No native `<input>`, `<select>`, `<button>`, or `<label>` — use shadcn components
+- [ ] Number inputs use `type="text"` with `inputMode`, not `type="number"`
+- [ ] Dropdowns use Radix `Select`, not `NativeSelect`
+- [ ] Forms use react-hook-form + zod (not manual useState)
+- [ ] Zod schemas defined in `src/lib/schemas/`
+- [ ] Server function validators use `.parse()` not identity functions
+- [ ] Data fetching uses `queryOptions()` + `useSuspenseQuery`, not direct server fn calls
+- [ ] Mutations use `useMutation` with cache invalidation, not manual `router.invalidate()`
 
 ## Anti-Patterns to Avoid
 
@@ -245,3 +361,12 @@ Before finishing any frontend work, verify:
 | Flat solid backgrounds | Lacks atmosphere | Add texture, patterns |
 | Generic card shadows | Cookie-cutter feel | Theme-specific effects |
 | Even color distribution | Timid, unfocused | Bold dominant + accents |
+| Native `<select>` | Browser dropdown ignores theme | Use Radix `Select` component |
+| Native `<input type="number">` | Grey spinners, leading zeros | `type="text"` + `inputMode="decimal"` |
+| Native `<button>` | Inconsistent styling | Use shadcn `Button` variants |
+| Manual `useState` for forms | No validation, fragile | react-hook-form + zod |
+| Identity input validators | No runtime checks | `schema.parse(d)` with zod |
+| Direct server fn in loader | No caching, no background refetch | `ensureQueryData(myQuery())` |
+| `router.invalidate()` after mutation | Refetches everything | `queryClient.invalidateQueries()` |
+| `setInterval` + `router.invalidate()` | No stale-while-revalidate | `refetchInterval` on query |
+| `useState` for mutation loading | Manual state management | `useMutation` `isPending` |

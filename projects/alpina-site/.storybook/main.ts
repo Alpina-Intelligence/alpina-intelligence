@@ -13,7 +13,7 @@ function getAbsolutePath(value: string) {
 }
 const config: StorybookConfig = {
   "stories": [
-    "../src/**/*.mdx",
+    "../src/components/**/*.mdx",
     "../src/**/*.stories.@(js|jsx|mjs|ts|tsx)"
   ],
   "addons": [
@@ -23,6 +23,27 @@ const config: StorybookConfig = {
     getAbsolutePath('@storybook/addon-docs'),
     getAbsolutePath('@storybook/addon-onboarding')
   ],
-  "framework": getAbsolutePath('@storybook/react-vite')
+  "framework": getAbsolutePath('@storybook/react-vite'),
+  viteFinal: (config) => ({
+    ...config,
+    plugins: (config.plugins ?? []).filter((plugin) => {
+      const name = (plugin as { name?: string })?.name ?? '';
+      return (
+        !name.includes('nitro') &&
+        !name.includes('fullstack') &&
+        !name.includes('tanstack-start') &&
+        !name.includes('mdx')
+      );
+    }),
+    optimizeDeps: {
+      ...config.optimizeDeps,
+      exclude: [
+        ...(config.optimizeDeps?.exclude ?? []),
+        '@tanstack/react-start',
+        '@tanstack/router-ssr-query-core',
+        '@tanstack/react-router-ssr-query',
+      ],
+    },
+  }),
 };
 export default config;
