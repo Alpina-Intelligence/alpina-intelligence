@@ -4,7 +4,13 @@ Guidance for Claude Code when working in this repository.
 
 ## Monorepo Structure
 
-Projects live in `projects/`; shared libraries in `packages/`. Root provides shared TypeScript and Biome config.
+Projects live in `projects/`; cross-product shared libraries in `packages/`. Root provides shared TypeScript and Biome config.
+
+**Layout convention:**
+- **Single-deploy projects** (frontend-only or backend-only) live as flat siblings under `projects/`.
+- **Full-stack products** (separate frontend + backend deploys) live nested: `projects/<product>/{frontend,backend,shared}`. Product-specific shared zod schemas and TS types live in the `shared/` package and are imported by both sides. Reserve `packages/` for things genuinely shared *across* products.
+
+**Default stack for new full-stack products:** TanStack Router SPA (frontend) + Hono on Bun (backend) + Drizzle ORM + Better Auth + zod. Hono RPC gives end-to-end type safety without codegen. This stack is mobile-ready (PWA → Capacitor → native) by default.
 
 | Project | Stack | Notes |
 | --- | --- | --- |

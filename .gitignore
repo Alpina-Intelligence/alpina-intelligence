@@ -216,6 +216,9 @@ routeTree.gen.ts
 # Playwright MCP screenshots
 .playwright-mcp/
 
+# Skill eval workspaces (created by skill-creator during evaluation)
+.claude/skills/*-workspace/
+
 node_modules/
 
 # scratch files
