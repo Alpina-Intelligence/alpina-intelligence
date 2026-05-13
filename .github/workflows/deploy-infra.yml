@@ -1,0 +1,45 @@
+name: Deploy infra
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "infra/docker-compose.yml"
+      - "infra/ensure-databases.sql"
+      - ".github/workflows/deploy-infra.yml"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Copy infra files to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "infra/docker-compose.yml,infra/ensure-databases.sql"
+          target: "/opt/alpina"
+          strip_components: 1
+          overwrite: true
+
+      - name: Apply infra
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            cd /opt/alpina
+            PG_USER="$(grep ^POSTGRES_USER .env | cut -d= -f2)"
+            docker compose up -d db mlflow
+            until docker compose exec -T db pg_isready -U "$PG_USER" >/dev/null 2>&1; do sleep 1; done
+            docker compose exec -T db psql -U "$PG_USER" -d postgres -f /docker-entrypoint-initdb.d/init.sql
+            # Reconcile every service against the new compose file; picks up
+            # newly-added services automatically. App tags stay whatever .env
+            # has them pinned to (each app's own deploy workflow updates that).
+            docker compose up -d

@@ -1,0 +1,4 @@
+# Dev fixtures fetched from public sources — not checked in.
+# Re-fetch with: bun run fetch:epubs
+*
+!.gitignore

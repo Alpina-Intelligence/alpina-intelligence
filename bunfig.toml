@@ -1,2 +1,9 @@
 [install]
 publicHoistPattern = ["@types/*", "bun-types", "nitro*"]
+
+# Refuse any npm version published less than 7 days ago.
+# Defense against fast-moving supply-chain attacks (e.g. TanStack 2026-05-11
+# Mini Shai-Hulud worm — malicious versions were live for hours before
+# being pulled). 7 days is enough that the community will have flagged
+# anything bad. Tighten/loosen as needed.
+minimumReleaseAge = 604800

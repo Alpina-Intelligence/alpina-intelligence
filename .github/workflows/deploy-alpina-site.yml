@@ -1,14 +1,14 @@
-name: Deploy puck-prophet
+name: Deploy alpina-site
 
 on:
   push:
     branches: [main]
     paths:
-      - "projects/puck-prophet/**"
+      - "projects/alpina-site/**"
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}/puck-prophet
+  IMAGE_NAME: ${{ github.repository }}/alpina-site
 
 jobs:
   build-and-deploy:
@@ -31,7 +31,7 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-          context: ./projects/puck-prophet
+          context: ./projects/alpina-site
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
@@ -48,7 +48,7 @@ jobs:
           strip_components: 1
           overwrite: true
 
-      - name: Deploy puck-prophet
+      - name: Deploy alpina-site
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -58,14 +58,15 @@ jobs:
           script: |
             set -euo pipefail
             cd /opt/alpina
-            if grep -q '^PUCK_PROPHET_TAG=' .env; then
-              sed -i "s|^PUCK_PROPHET_TAG=.*|PUCK_PROPHET_TAG=${GITHUB_SHA}|" .env
+            # Pin tag for SHA-based rollback.
+            if grep -q '^ALPINA_SITE_TAG=' .env; then
+              sed -i "s|^ALPINA_SITE_TAG=.*|ALPINA_SITE_TAG=${GITHUB_SHA}|" .env
             else
-              echo "PUCK_PROPHET_TAG=${GITHUB_SHA}" >> .env
+              echo "ALPINA_SITE_TAG=${GITHUB_SHA}" >> .env
             fi
             PG_USER="$(grep ^POSTGRES_USER .env | cut -d= -f2)"
             docker compose up -d db
             until docker compose exec -T db pg_isready -U "$PG_USER" >/dev/null 2>&1; do sleep 1; done
             docker compose exec -T db psql -U "$PG_USER" -d postgres -f /docker-entrypoint-initdb.d/init.sql
-            docker compose pull puck-prophet
-            docker compose up -d puck-prophet
+            docker compose pull alpina-site
+            docker compose up -d alpina-site

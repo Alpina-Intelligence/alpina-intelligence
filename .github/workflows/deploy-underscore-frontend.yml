@@ -1,14 +1,18 @@
-name: Deploy puck-prophet
+name: Deploy underscore-frontend
 
 on:
   push:
     branches: [main]
     paths:
-      - "projects/puck-prophet/**"
+      - "projects/underscore/frontend/**"
+      - "projects/underscore/shared/**"
+      - "projects/underscore/package.json"
+      - "projects/underscore/bun.lock"
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}/puck-prophet
+  IMAGE_NAME: ${{ github.repository }}/underscore-frontend
+  VITE_API_URL: https://api.read.alpina-intelligence.com
 
 jobs:
   build-and-deploy:
@@ -20,6 +24,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -31,8 +37,11 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-          context: ./projects/puck-prophet
+          context: ./projects/underscore
+          file: ./projects/underscore/frontend/Dockerfile
           push: true
+          build-args: |
+            VITE_API_URL=${{ env.VITE_API_URL }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
@@ -48,7 +57,7 @@ jobs:
           strip_components: 1
           overwrite: true
 
-      - name: Deploy puck-prophet
+      - name: Deploy underscore-frontend
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -58,14 +67,14 @@ jobs:
           script: |
             set -euo pipefail
             cd /opt/alpina
-            if grep -q '^PUCK_PROPHET_TAG=' .env; then
-              sed -i "s|^PUCK_PROPHET_TAG=.*|PUCK_PROPHET_TAG=${GITHUB_SHA}|" .env
+            if grep -q '^UNDERSCORE_FRONTEND_TAG=' .env; then
+              sed -i "s|^UNDERSCORE_FRONTEND_TAG=.*|UNDERSCORE_FRONTEND_TAG=${GITHUB_SHA}|" .env
             else
-              echo "PUCK_PROPHET_TAG=${GITHUB_SHA}" >> .env
+              echo "UNDERSCORE_FRONTEND_TAG=${GITHUB_SHA}" >> .env
             fi
             PG_USER="$(grep ^POSTGRES_USER .env | cut -d= -f2)"
             docker compose up -d db
             until docker compose exec -T db pg_isready -U "$PG_USER" >/dev/null 2>&1; do sleep 1; done
             docker compose exec -T db psql -U "$PG_USER" -d postgres -f /docker-entrypoint-initdb.d/init.sql
-            docker compose pull puck-prophet
-            docker compose up -d puck-prophet
+            docker compose pull underscore-frontend
+            docker compose up -d underscore-frontend

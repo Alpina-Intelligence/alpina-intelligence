@@ -17,6 +17,8 @@ Projects live in `projects/`; cross-product shared libraries in `packages/`. Roo
 | `projects/alpina-site` | TanStack Start + shadcn/ui | Frontend — use the `alpina-frontend` skill |
 | `projects/puck-prophet` | TanStack Start + Drizzle/PostgreSQL | Frontend + DB layer — use `alpina-frontend` skill for UI |
 | `projects/unified-data-platform` | Python / uv | Data/backend; no frontend |
+| `projects/underscore/{frontend,backend,shared}` | TanStack Router SPA + Hono on Bun + Drizzle | E-reader product (Underscore); use `alpina-frontend` skill for UI |
+| `projects/underscore/annotator` | Python / uv (instructor + Pydantic + Ollama) | Underscore's offline book-annotation pipeline (mood/tension/genre tagging) for music conditioning; not a deployed service |
 
 ## Bun Over Node
 
