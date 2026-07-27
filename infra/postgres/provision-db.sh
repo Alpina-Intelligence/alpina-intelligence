@@ -62,7 +62,9 @@ compose() { docker compose --project-directory "$DIR" -f "$DIR/compose.yaml" "$@
 
 # Cheapest reliable liveness check, and portable across compose versions (the
 # `ps --status` flag isn't). Also catches "container up but still initialising".
-compose exec -T postgres pg_isready -U postgres -q 2>/dev/null \
+# `</dev/null` matters: `compose exec -T` inherits stdin, so without it this check
+# would eat the caller's stdin (e.g. when this script is itself piped into bash).
+compose exec -T postgres pg_isready -U postgres -q </dev/null 2>/dev/null \
   || die "platform postgres is not accepting connections (try: systemctl start platform-postgres)"
 
 # ── password: reuse, or mint ────────────────────────────────────────────────
@@ -94,9 +96,11 @@ ALTER ROLE "$ROLE" WITH LOGIN PASSWORD '$PASSWORD' CONNECTION LIMIT $CONN_LIMIT;
 SELECT format('CREATE DATABASE %I OWNER %I', '$DB', '$ROLE')
  WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '$DB')\gexec
 
--- The control that makes a shared instance safe: strip the default PUBLIC grant so
--- only this project's role can open this database.
-REVOKE CONNECT ON DATABASE "$DB" FROM PUBLIC;
+-- The control that makes a shared instance safe: strip the default PUBLIC grants so
+-- only this project's role can open this database. ALL rather than just CONNECT —
+-- otherwise PUBLIC keeps a residual TEMP grant (harmless while CONNECT is gone, but
+-- "no grants at all" is easier to verify in \l than "one grant, but the inert one").
+REVOKE ALL   ON DATABASE "$DB" FROM PUBLIC;
 GRANT  CONNECT ON DATABASE "$DB" TO "$ROLE";
 SQL
 
