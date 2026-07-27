@@ -1,0 +1,22 @@
+# Hand-written, NOT a language template. GitHub's templates assume a single-language
+# repo and use unanchored directory patterns that match at ANY depth — a bare `lib/`
+# or `env/` will silently swallow real source in a subdirectory. Generic words are
+# root-anchored (`/var/`); only unmistakable names stay unanchored.
+
+# Secrets — real values live only on the box, root-600.
+.env
+.env.*
+!.env*.example
+
+# Per-project DB credentials emitted by infra/postgres/provision-db.sh
+secrets/
+
+# Terraform (once it lands)
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+
+# Editor / OS noise
+.DS_Store
+*.swp

@@ -1,0 +1,103 @@
+# Production compose for Hetzner VPS.
+# Shipped by GitHub Actions to /opt/alpina/docker-compose.yml on the VPS —
+# do NOT hand-edit on the box.
+#
+# All app ports bind to 127.0.0.1 — Cloudflare Tunnel is the only ingress.
+# Image tags default to `latest`; each deploy workflow pins its <APP>_TAG in
+# /opt/alpina/.env to the commit SHA so rollback is .env edit + `up -d`.
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5432:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./ensure-databases.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v3.1.0
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5000:5000"
+    environment:
+      MLFLOW_BACKEND_STORE_URI: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/mlflow
+      MLFLOW_ARTIFACTS_DESTINATION: /mlflow/artifacts
+    volumes:
+      - mlflow_artifacts:/mlflow/artifacts
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >
+      bash -c "pip install --no-cache-dir psycopg2-binary &&
+      mlflow server
+      --host 0.0.0.0
+      --port 5000
+      --backend-store-uri postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/mlflow
+      --artifacts-destination /mlflow/artifacts"
+
+  alpina-site:
+    image: ghcr.io/alpina-intelligence/alpina-site:${ALPINA_SITE_TAG:-latest}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/alpina
+      BETTER_AUTH_SECRET: ${ALPINA_SITE_BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: https://alpina-intelligence.com
+    depends_on:
+      db:
+        condition: service_healthy
+
+  puck-prophet:
+    image: ghcr.io/alpina-intelligence/puck-prophet:${PUCK_PROPHET_TAG:-latest}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3003:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/puck_prophet
+      BETTER_AUTH_SECRET: ${PUCK_PROPHET_BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: https://puck-prophet.alpina-intelligence.com
+    depends_on:
+      db:
+        condition: service_healthy
+
+  underscore-backend:
+    image: ghcr.io/alpina-intelligence/underscore-backend:${UNDERSCORE_BACKEND_TAG:-latest}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3001:3001"
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/underscore
+      BETTER_AUTH_SECRET: ${UNDERSCORE_BETTER_AUTH_SECRET}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  underscore-frontend:
+    image: ghcr.io/alpina-intelligence/underscore-frontend:${UNDERSCORE_FRONTEND_TAG:-latest}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3002:80"
+    depends_on:
+      - underscore-backend
+
+volumes:
+  postgres_data:
+  mlflow_artifacts:

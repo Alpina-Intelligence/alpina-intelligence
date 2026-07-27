@@ -1,0 +1,54 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Shared Postgres for every project on the box. Runs as a host service,
+# DELIBERATELY OUTSIDE k3s and outside Terraform.
+#
+# Why outside the cluster: a single-node k3s StatefulSet buys all of k8s's stateful
+# complexity with none of its HA payoff (no second node to fail over to). The data is
+# the only thing here that can't be rebuilt from git, so it stays out of BOTH the
+# cluster's and Terraform's destroy/apply blast radius. Apps in k3s reach it via a
+# selector-less Service + manual Endpoints → the host.
+#
+# Why ONE instance shared, rather than one per project: on a single small box you pay
+# shared_buffers, WAL and autovacuum ONCE instead of N times. Isolation between
+# projects comes from per-project roles + `REVOKE CONNECT … FROM PUBLIC`, applied by
+# provision-db.sh — NOT from Postgres defaults, which let any role connect to any
+# database. The accepted cost: version upgrades are a coordinated event across all
+# projects, and one runaway project can disrupt the others (mitigated by per-role
+# CONNECTION LIMIT).
+#
+# Managed by systemd unit `platform-postgres.service` (see this dir). The superuser
+# password lives in a root-600 `.env` beside this file, generated ON the box — never
+# committed. See .env.example.
+#
+# NOTE: there is no initdb/ mount. Databases are NOT created at first init, because
+# that only ever runs once and could never provision project #2. All provisioning
+# goes through provision-db.sh, which is idempotent and safe to re-run.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: platform
+
+services:
+  postgres:
+    image: postgres:17 # major-version parity with every project's local dev DB
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env on the box}
+      POSTGRES_DB: postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # Bind to loopback for now — nothing else needs it yet, and this is safe
+    # regardless of firewall state. WHEN THE FIRST APP DEPLOYS TO k3s: rebind to the
+    # node-internal IP that pods can reach, and point the k8s Endpoints at it.
+    ports:
+      - '127.0.0.1:5432:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:
+    # Named so it survives `compose down` and is obvious in `docker volume ls`.
+    name: platform_pgdata
