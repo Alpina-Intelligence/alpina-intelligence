@@ -4,8 +4,8 @@ The shared substrate: one Hetzner VPS, reached only through a Cloudflare tunnel,
 k3s for apps and a shared Postgres for their data. Every project on the box depends on
 what's described here; nothing here depends on any particular project.
 
-> Status: **living doc.** Orchestration, infra-as-code and database placement are
-> decided. Deploy mechanism and secret delivery are chosen but not built — see §6.
+> Status: **living doc.** Orchestration, routing, infra-as-code and database placement
+> are decided. Deploy mechanism and secret delivery are chosen but not built — see §7.
 
 ## 1. Two repos, one boundary
 
@@ -36,7 +36,7 @@ flowchart LR
     user([Visitor])
     subgraph cf["Cloudflare edge — Terraform-managed"]
         dns["DNS — wildcard<br/>*.alpina-intelligence.com"]
-        tun["Tunnel ingress<br/>ONE static rule"]
+        tun["Tunnel ingress<br/>catch-all → Traefik<br/>+ named hostnames for Access"]
     end
     subgraph vps["Hetzner VPS — no inbound ports but :22"]
         cfd["cloudflared (systemd)"]
@@ -57,10 +57,73 @@ flowchart LR
 
 **Why the tunnel and not an open port:** hostname routing already happens twice — at
 Cloudflare's edge and again at the in-cluster ingress. A third reverse proxy on the host
-would earn nothing. The tunnel keeps exactly one static rule; per-project routing lives
-in each repo's `Ingress`.
+would earn nothing. Where each routing decision lives is §3.
 
-## 3. Orchestration — k3s
+## 3. Routing — tunnel, Traefik, Access
+
+### The layers
+
+| Layer | Decides | Configured in |
+| --- | --- | --- |
+| DNS — `*.alpina-intelligence.com` | which tunnel a hostname reaches | Terraform (this repo) |
+| Tunnel ingress | which local address a request goes to | Terraform (this repo) |
+| Traefik | which Service a hostname maps to | an `Ingress` in **the app's repo** |
+
+The wildcard is proxied CNAME → `<tunnel-id>.cfargotunnel.com`, so a new subdomain
+resolves with no DNS change at all, and **no `A` record for the box exists in the zone** —
+the origin IP is genuinely unpublished.
+
+`http://localhost:80` is subtler than it looks: nothing *listens* there. k3s's ServiceLB
+(klipper) DNATs host `:80/:443` into the Traefik pod with iptables rules, so `ss` shows no
+socket. Expect to be confused by that once.
+
+### Routing lives in Ingress, not in the tunnel
+
+`cloudflared` can route by hostname — that's how most tunnels are used — and it was
+rejected here. Doing so needs a stable local address per app, which means either
+hand-allocated NodePorts (a number to keep in sync across two repos, forever) or ClusterIPs
+you don't control. Only one Service can own host `:80`, which is the collision an ingress
+controller exists to resolve. And Traefik is already watching the API server doing exactly
+this job for free.
+
+The rule that follows: **adding an app touches one repo.** A project ships its own
+`Ingress`; the shared tunnel config doesn't move.
+
+### Cloudflare Access needs a named hostname
+
+The exception that shapes the design. Access policies attach to a **public hostname on the
+tunnel** — a bare catch-all has no hostname to scope a policy to. So the ingress list is a
+hybrid: named entries exist *only* to give Access something to bind to, and still point at
+the same place.
+
+```yaml
+ingress:
+  - hostname: admin.alpina-intelligence.com
+    service: http://localhost:80      # + Access policy on this hostname
+  - service: http://localhost:80      # everything else → Traefik → per-app Ingress
+```
+
+Both go to Traefik; hostname routing is still Traefik's job. Shared config therefore
+changes when an **auth boundary** is added, not when an app is. The Google IdP
+(`72d86760-df75-4b64-b250-c88251fd8505`) is already provisioned for this.
+
+**Access enforces at the edge, not on the box.** A request that reaches Traefik by any
+other path is unauthenticated — mitigated by there being no other path (no inbound ports),
+but it means Traefik must never become reachable directly. For anything genuinely
+sensitive, the app should also verify the `Cf-Access-Jwt-Assertion` header rather than
+trusting that it was fronted.
+
+### No TLS inside the box
+
+The edge terminates HTTPS and holds the `*.alpina-intelligence.com` certificate, so
+nothing here runs certbot or cert-manager. Edge → `cloudflared` is encrypted; everything
+after it — `cloudflared` → Traefik → pod — is plaintext over loopback and the cluster
+network. Fine on a single node, and another reason the firewall's default-deny is load
+bearing rather than belt-and-braces.
+
+Connector details and the runbook: [`infra/cloudflared/`](../infra/cloudflared/).
+
+## 4. Orchestration — k3s
 
 Chosen over Docker Compose and Kamal on two grounds:
 
@@ -78,7 +141,7 @@ Installed: `v1.36.2+k3s1`, single node, bundled Traefik + ServiceLB. Klipper DNA
 `:80/:443` via iptables — there is no listening socket in `ss`, which is confusing the
 first time you look for one.
 
-## 4. Postgres — shared, and outside the cluster
+## 5. Postgres — shared, and outside the cluster
 
 Two independent decisions that often get conflated.
 
@@ -113,7 +176,7 @@ and `pg_roles`. Fine when one person owns everything; not a tenancy boundary.
 
 Details and runbook: [`infra/postgres/`](../infra/postgres/).
 
-## 5. Infra as code — Terraform + Cloudflare
+## 6. Infra as code — Terraform + Cloudflare
 
 Everything on the shared layer is codified, so changes are PRs rather than hand-run API
 calls.
@@ -121,11 +184,21 @@ calls.
 - **Provider** `cloudflare/cloudflare`, version-pinned. Adopt the existing tunnel, wildcard
   DNS and Google IdP with `terraform import` — don't recreate. The v5 rewrite renamed many
   resources to `zero_trust_*` and changed nested field shapes; verify against v5 docs.
-- **Auth:** a scoped API token, never the global key.
-- **State:** R2 (already in the account, S3-compatible).
+- **Auth:** a scoped API token, never the global key. It lives in CI, never on the box.
+- **State:** R2 (already in the account, S3-compatible). **State holds secrets in
+  plaintext** — importing the tunnel *resource* would put the connector token in it, so
+  import only `..._tunnel_cloudflared_config` and the DNS record and leave the tunnel
+  itself unmanaged. It's a create-once object that will never be modified. Bucket stays
+  private with tightly scoped keys either way; this concentrates credentials rather than
+  eliminating them. Locking needs `use_lockfile = true` (the old S3 backend wanted
+  DynamoDB) — **verify against R2** during bootstrap rather than during a race.
+- **Runs locally first, CI after.** The initial import is iterative — plan, see an
+  unexpected diff, adjust HCL, repeat — which is miserable through CI round-trips. Once
+  `plan` is clean against reality: PR → `plan` as a comment, merge → `apply`. A separate
+  workflow from any app's deploy pipeline; infra changes monthly, apps change constantly.
 - **Deliberately excluded:** the Postgres host container. No infra change can touch the DB.
 
-## 6. Secrets and deploy — decided, not yet built
+## 7. Secrets and deploy — decided, not yet built
 
 ### The constraint
 
@@ -189,15 +262,26 @@ that copies bytes *off* the box.
 4. Then Flux + SOPS. Same Secret names, same `secretKeyRef`, so app manifests don't
    change. That's what makes deferring it safe rather than a rewrite.
 
-## 7. Open questions
+## 8. Open questions
 
 1. ~~Orchestration~~ → k3s ✅ · ~~Postgres placement~~ → host, shared ✅ · ~~deploy
-   mechanism~~ → Flux ✅
+   mechanism~~ → Flux ✅ · ~~tunnel config management~~ → remote, Terraform-owned ✅ ·
+   ~~where routing lives~~ → per-app `Ingress`, named tunnel hostnames only for Access ✅
 2. **Rebind Postgres** from `127.0.0.1` to a pod-reachable node IP; add the Service +
    Endpoints. Blocking the first app deploy.
 3. **Registry** — GHCR vs Cloudflare's.
 4. **Backups** — per-database `pg_dump` → R2, plus `pg_dumpall --globals-only` for roles.
    Encrypt them: they leave the box. Do before real traffic.
-5. **Terraform bootstrap** — provider pin, R2 backend, import tunnel + DNS, then flip the
-   tunnel from its `http_status:404` catch-all to one static rule → `localhost:80`.
+5. **Terraform bootstrap** — provider pin, R2 backend, import the wildcard record and
+   `cloudflare_zero_trust_tunnel_cloudflared_config` (currently version 6, a lone
+   `http_status:404`), then flip the catch-all to `http://localhost:80`. Gated on minting
+   the scoped `CLOUDFLARE_API_TOKEN`. Tear down `whoami-test` first or in the same change —
+   it's the only `Ingress` on the cluster, so flipping the catch-all would publish it.
 6. **Tear down** the `whoami-test` workload still running in k3s.
+7. **Host patching policy.** `unattended-upgrades` is active and installing security
+   updates, but `Automatic-Reboot` is unset — so on 2026-08-01 the box had been up 26
+   weeks running kernel `6.8.0-90` with `6.8.0-136` and a new `libc6` installed but never
+   loaded. Patched-but-not-running is a quieter failure than unpatched, and looks healthy
+   from every angle except `uname -r`. Decide between a scheduled `Automatic-Reboot` window
+   and a deliberate reboot habit; a single node with no HA makes it a real tradeoff, but an
+   indefinite gap is the worse end of it.
