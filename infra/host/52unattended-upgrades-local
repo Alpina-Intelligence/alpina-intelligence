@@ -1,0 +1,26 @@
+// Deployed to /etc/apt/apt.conf.d/52unattended-upgrades-local on the VPS.
+//
+// A separate drop-in rather than edits to 50unattended-upgrades: that file is
+// package-owned, and an upgrade of unattended-upgrades can prompt over or replace it.
+// The 52 prefix sorts after 50, so these win.
+//
+// WHY: unattended-upgrades was already installing security updates, but with
+// Automatic-Reboot unset nothing ever loaded them. On 2026-08-01 the box had been up 26
+// weeks running kernel 6.8.0-90 while 6.8.0-136 and a newer libc6 sat installed and
+// unused. Patched-but-not-running looks healthy from every angle except `uname -r`, which
+// makes it a worse failure mode than being visibly unpatched.
+//
+// The tradeoff accepted: a single node with no HA means every reboot is a brief outage.
+// A ~30s outage at a predictable hour beats an unbounded window of unloaded kernel fixes.
+
+Unattended-Upgrade::Automatic-Reboot "true";
+
+// Reboot even when someone is logged in. Counter-intuitive, but on a headless box the
+// only "user" is an admin SSH session — and a forgotten session would otherwise block
+// reboots indefinitely, recreating exactly the problem this fixes.
+Unattended-Upgrade::Automatic-Reboot-WithUsers "true";
+
+// UTC (the box runs Etc/UTC). 10:00 UTC is ~03:00 US Pacific / 06:00 Eastern — the
+// quietest window for a North America-facing audience. Only fires when a reboot is
+// actually required; it is not a nightly restart.
+Unattended-Upgrade::Automatic-Reboot-Time "10:00";

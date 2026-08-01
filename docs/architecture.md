@@ -211,6 +211,26 @@ needs no inbound access at all: a controller reaches out to git, same posture as
 Chosen: **Flux** over Argo — ~100MB vs 400MB+, and no web UI to expose and protect.
 Multi-repo is native: one `GitRepository`/`Kustomization` per project, registered here.
 
+### Registry — GHCR
+
+Images go to `ghcr.io`, private, one package per project. CI already runs in GitHub
+Actions, so `GITHUB_TOKEN` pushes with no extra credential; the cluster pulls with a single
+`imagePullSecret`. GitHub currently charges nothing for container storage or bandwidth, and
+Actions pulls don't count against the hosting repo either way.
+
+**Cloudflare's registry was evaluated and doesn't fit** — worth recording so it isn't
+re-litigated. `registry.cloudflare.com` is plumbing for Cloudflare Containers: you push
+with `wrangler containers push` and *Cloudflare's* runtime pulls, with auth handled
+implicitly on both ends. There's no supported path for an arbitrary external client to pull
+from it (even `vite dev` can't). Using it would mean adopting Cloudflare Containers as the
+runtime instead of k3s — a different deployment model, not a different registry. Same shape
+of answer for Cloudflare's Secrets Store, and Cloudflare hosts no git at all: Workers Builds
+connects *to* GitHub and only deploys Workers.
+
+Neither choice moves a trust boundary. The source already lives on GitHub, and Cloudflare
+already terminates TLS for every request. The control that matters is package
+visibility — set it private explicitly rather than inheriting a default.
+
 ### Where secrets live
 
 ```mermaid
@@ -266,10 +286,18 @@ that copies bytes *off* the box.
 
 1. ~~Orchestration~~ → k3s ✅ · ~~Postgres placement~~ → host, shared ✅ · ~~deploy
    mechanism~~ → Flux ✅ · ~~tunnel config management~~ → remote, Terraform-owned ✅ ·
-   ~~where routing lives~~ → per-app `Ingress`, named tunnel hostnames only for Access ✅
+   ~~where routing lives~~ → per-app `Ingress`, named tunnel hostnames only for Access ✅ ·
+   ~~registry~~ → GHCR ✅ · ~~host patching~~ → scheduled auto-reboot ✅
 2. **Rebind Postgres** from `127.0.0.1` to a pod-reachable node IP; add the Service +
    Endpoints. Blocking the first app deploy.
-3. **Registry** — GHCR vs Cloudflare's.
+3. **Where CI's infra credentials live** — `CLOUDFLARE_API_TOKEN` and the R2 state keys.
+   Narrower than it sounds: app secrets are already settled (SOPS + age in git, decrypted
+   by Flux) and the DB password never leaves the box, so this is two values. GitHub Actions
+   secrets with Bitwarden as vault of record adds no component; Bitwarden Secrets Manager
+   (`bws`, projects `platform` + `puckprophet`) buys audit and rotation at the cost of a
+   machine token to guard. Undecided — revisit when the fleet is large enough that manual
+   rotation is real work. Cloudflare's Secrets Store is not a candidate: like their
+   registry, it feeds Cloudflare's runtime, not a k3s cluster on our own box.
 4. **Backups** — per-database `pg_dump` → R2, plus `pg_dumpall --globals-only` for roles.
    Encrypt them: they leave the box. Do before real traffic.
 5. **Terraform bootstrap** — provider pin, R2 backend, import the wildcard record and
@@ -279,10 +307,6 @@ that copies bytes *off* the box.
    (`whoami-test` torn down 2026-08-01 — it had claimed
    `puckprophet.alpina-intelligence.com`, so flipping the catch-all would have served a
    test container at the real hostname), so the flip is safe whenever the token exists.
-6. **Host patching policy.** `unattended-upgrades` is active and installing security
-   updates, but `Automatic-Reboot` is unset — so on 2026-08-01 the box had been up 26
-   weeks running kernel `6.8.0-90` with `6.8.0-136` and a new `libc6` installed but never
-   loaded. Patched-but-not-running is a quieter failure than unpatched, and looks healthy
-   from every angle except `uname -r`. Decide between a scheduled `Automatic-Reboot` window
-   and a deliberate reboot habit; a single node with no HA makes it a real tradeoff, but an
-   indefinite gap is the worse end of it.
+6. **Non-security package upgrades** still accumulate (47 pending as of 2026-08-01) and are
+   applied by hand. Deliberate — same reasoning as `--no-autoupdate` on cloudflared — but
+   worth a periodic sweep rather than never.
