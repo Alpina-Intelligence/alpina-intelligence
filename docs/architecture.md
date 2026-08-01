@@ -275,10 +275,11 @@ that copies bytes *off* the box.
 5. **Terraform bootstrap** — provider pin, R2 backend, import the wildcard record and
    `cloudflare_zero_trust_tunnel_cloudflared_config` (currently version 6, a lone
    `http_status:404`), then flip the catch-all to `http://localhost:80`. Gated on minting
-   the scoped `CLOUDFLARE_API_TOKEN`. Tear down `whoami-test` first or in the same change —
-   it's the only `Ingress` on the cluster, so flipping the catch-all would publish it.
-6. **Tear down** the `whoami-test` workload still running in k3s.
-7. **Host patching policy.** `unattended-upgrades` is active and installing security
+   the scoped `CLOUDFLARE_API_TOKEN`. The cluster now has **no** `Ingress` at all
+   (`whoami-test` torn down 2026-08-01 — it had claimed
+   `puckprophet.alpina-intelligence.com`, so flipping the catch-all would have served a
+   test container at the real hostname), so the flip is safe whenever the token exists.
+6. **Host patching policy.** `unattended-upgrades` is active and installing security
    updates, but `Automatic-Reboot` is unset — so on 2026-08-01 the box had been up 26
    weeks running kernel `6.8.0-90` with `6.8.0-136` and a new `libc6` installed but never
    loaded. Patched-but-not-running is a quieter failure than unpatched, and looks healthy
