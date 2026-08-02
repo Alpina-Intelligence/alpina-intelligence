@@ -282,7 +282,96 @@ that copies bytes *off* the box.
 4. Then Flux + SOPS. Same Secret names, same `secretKeyRef`, so app manifests don't
    change. That's what makes deferring it safe rather than a rewrite.
 
-## 8. Open questions
+## 8. Paths not taken (yet)
+
+Evaluated 2026-08-01. None of it is wrong for us later — it's recorded so the reasoning
+doesn't have to be rebuilt.
+
+### What this architecture actually buys
+
+Worth stating, because "a VPS in 2026" sounds like the boring choice rather than a chosen
+one. The tunnel puts **Cloudflare's edge in front of an origin we still control**: CDN,
+TLS termination, DDoS absorption and caching, without giving up the runtime. And app and
+database are **colocated** — loaders query Postgres over loopback, sub-millisecond. That is
+the exact problem serverless-at-the-edge has to solve with connection pooling, query
+caching and placement hints (Cloudflare's own figures: 1–3 ms per query when a Worker is
+pinned near its database, 20–30 ms when it isn't). For loader-driven SSR making several
+sequential queries, colocation beats both, with no configuration.
+
+Everything else follows from fixed-cost, unmetered compute: argon2 hashing and SSR are free
+once the box is paid for, any runtime and any duration is permitted (the planned Python
+model tier, batch scoring, cron), and project #2 is a database provision plus a namespace
+rather than a new bill.
+
+Accepted in exchange: one node, no HA, vertical scaling only, and we own patching and
+backups.
+
+### Cloudflare Workers instead of k3s
+
+Viable for the web tier — TanStack Start is explicitly supported by
+`@cloudflare/vite-plugin` (`viteEnvironment: { name: "ssr" }`), and SSR suits an isolate
+fine because SSR was already stateless per request. What a Worker gives up is *process*
+memory, and each use has a named replacement: pools → Hyperdrive, caches → KV/Cache API,
+rate limits and realtime → Durable Objects, background work → Queues/Workflows, scheduling
+→ Cron Triggers. Sessions are already cookie-based here, so that part is unchanged.
+
+Two things stop it being a straight win:
+
+- **The Python model tier.** Workers is JS/WASM; arbitrary runtimes mean Cloudflare
+  Containers, which is orchestration again — someone else's. Training also doesn't fit
+  request-scoped compute (Cron Triggers cap at 15 minutes).
+- **Edge SSR against a central database isn't actually "edge."** Cloudflare's own guidance
+  is to pin execution near the data (`placement.region`, or `mode: "smart"`). That
+  converges on a regional server you don't operate — a real benefit, but not the
+  runs-in-330-cities story. Static and cached responses genuinely do go global.
+
+CPU limits are not the obstacle people expect: CPU time excludes waiting on I/O, and Paid
+allows 30 s (up to 5 min). The Free tier's 10 ms is what rules it out for SSR. The one real
+cost is argon2 password hashing — deliberately CPU-expensive, and on Workers you pay for it
+per sign-in.
+
+### If it ever moves, the database is the decision
+
+| Option | Code change | Cost | Still run a box? |
+| --- | --- | --- | --- |
+| D1 | SQLite: rewrite schema to `sqlite-core`, **lose `timestamptz`** | Free tier is real | No |
+| PlanetScale Postgres (via Hyperdrive, billed by Cloudflare) | None | Paid, billed daily whether queried or not | No |
+| Keep this Postgres, reached by Hyperdrive + Workers VPC over **this tunnel** | None | None | Yes |
+
+D1's read replication suits the workload conceptually — read-heavy, batch writes, and
+because predictions are **written once and never overwritten**, replicated rows are
+immutable, so replica lag can only ever mean "not visible yet", never "mutated out of
+order". It still costs `timestamptz`, which the app tier treats as load-bearing.
+
+### The cheaper lever is caching, not placement
+
+Most of this app's surface is public and identical for every visitor. Caching rendered
+output removes the database from the hot path entirely — a cache hit doesn't run a Worker
+or reach an origin at all. On *this* topology it's better than that: **a cache hit never
+traverses the tunnel**, so it costs no connector capacity, no Traefik, no pod, no Postgres.
+On a single node behind a single connector, edge caching is most of capacity planning.
+
+The precondition is already in the app: its `_public` route group must never depend on a
+session, which is exactly what makes those routes safe to cache. Rule shape: cache
+`_public`, bypass when a session cookie is present. `Set-Cookie` responses are safe by
+default — Origin Cache Control is Enterprise-only to disable and is *on* for everyone else,
+which means such responses are simply not cached.
+
+Zone state as of 2026-08-01: Cache Level **Standard**, Browser Cache TTL switched from 4
+hours to **Respect Existing Headers** (so the app's headers decide, which is the right
+layer), and **no custom Cache Rules exist** — 3 rulesets, none of `kind: "zone"`. Cache
+rules are shared-layer config and belong in Terraform, so the token needs **Zone Settings**
+alongside DNS and tunnel scope.
+
+### Portability is the quiet argument
+
+The Dockerfile isn't only for k3s. ACA, Cloud Run, Fly and Render all consume the same OCI
+image, so shedding the ops burden later is a config change, not a rewrite. Workers is the
+one target not reachable from that artifact — which is why "move to ACA" is an afternoon
+and "move to Workers" is a project. Either way the schema, migrations, write-once rule and
+route-group split survive intact.
+
+## 9. Open questions
 
 1. ~~Orchestration~~ → k3s ✅ · ~~Postgres placement~~ → host, shared ✅ · ~~deploy
    mechanism~~ → Flux ✅ · ~~tunnel config management~~ → remote, Terraform-owned ✅ ·
@@ -300,9 +389,11 @@ that copies bytes *off* the box.
    registry, it feeds Cloudflare's runtime, not a k3s cluster on our own box.
 4. **Backups** — per-database `pg_dump` → R2, plus `pg_dumpall --globals-only` for roles.
    Encrypt them: they leave the box. Do before real traffic.
-5. **Terraform bootstrap** — provider pin, R2 backend, import the wildcard record and
+5. **Terraform bootstrap** — provider pin, R2 backend, import the wildcard record,
    `cloudflare_zero_trust_tunnel_cloudflared_config` (currently version 6, a lone
-   `http_status:404`), then flip the catch-all to `http://localhost:80`. Gated on minting
+   `http_status:404`) **and the zone's cache configuration**, then flip the catch-all to
+   `http://localhost:80`. Import cache settings in the same first apply so it captures the
+   whole edge config rather than two-thirds of it — see §8. Gated on minting
    the scoped `CLOUDFLARE_API_TOKEN`. The cluster now has **no** `Ingress` at all
    (`whoami-test` torn down 2026-08-01 — it had claimed
    `puckprophet.alpina-intelligence.com`, so flipping the catch-all would have served a
