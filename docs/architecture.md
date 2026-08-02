@@ -231,45 +231,105 @@ Neither choice moves a trust boundary. The source already lives on GitHub, and C
 already terminates TLS for every request. The control that matters is package
 visibility — set it private explicitly rather than inheriting a default.
 
-### Where secrets live
+### Where secrets live — Bitwarden Secrets Manager (revised 2026-08-02)
+
+**This supersedes SOPS + age**, which earlier versions of this document specified. The
+change is that Bitwarden is now the *source of truth* rather than an escrow copy, and no
+app secret is stored in git in any form — not even encrypted.
+
+`sm-operator` runs in-cluster, authenticates with a Bitwarden machine account, and
+reconciles `BitwardenSecret` CRs into ordinary k8s Secrets on a 300s timer. Deployment
+manifests reference those by `secretKeyRef` and never know Bitwarden exists. Runbook:
+`infra/sm-operator/README.md`.
 
 ```mermaid
 flowchart LR
-    bw[("Bitwarden — escrow")]
+    bw[("Bitwarden Secrets Manager<br/>source of truth")]
     subgraph gh["GitHub"]
-        enc["app secrets<br/>SOPS-encrypted"]
+        m["manifests<br/>no secret values"]
     end
     subgraph box["VPS"]
-        key["age key<br/>(k8s Secret, bootstrapped once)"]
-        s1["Secret: app config"]
-        s2["Secret: DB creds<br/>created on box, NOT in git"]
+        subgraph k8s["k3s"]
+            tok["bw-auth-token<br/>(bootstrapped by hand,<br/>per namespace)"]
+            op["sm-operator"]
+            s1["Secret: app config"]
+            s2["Secret: DB creds<br/>created on box, NOT synced"]
+        end
+        host["cloudflared / Postgres<br/>0600 files on disk"]
     end
-    enc -->|"Flux pulls + decrypts"| s1
-    key --> s1
-    bw -.->|"recovery copy"| key
+    bw -->|"machine account, read-only"| op
+    tok --> op
+    op --> s1
+    m -->|"Flux"| s1
+    bw -.->|"copy of record"| host
 ```
 
-- **DB credentials** are generated on the box by `provision-db.sh`, written straight into
-  a k8s Secret, and left **unmanaged by Flux** — the highest-value secret never reaches
-  GitHub in any form. Cost: a cluster rebuild re-runs the provisioner, which you'd want
-  anyway since rebuilding means rotating.
-- **App config secrets** go in git encrypted with SOPS + age. Only values are encrypted,
-  so diffs stay reviewable.
-- **The age private key** is the one thing that must be guarded: bootstrapped into
-  `flux-system` by hand, escrowed in Bitwarden, and **not regenerable** — losing it
-  orphans every encrypted secret in git.
+Why this over SOPS: rotation stops being a git commit. With SOPS, changing a password means
+re-encrypting, committing, pushing, and waiting for reconciliation — so a rotation is a code
+change, and the *encrypted history stays in git forever*, decryptable by anyone who ever
+obtains the age key. With a secrets manager the old value is simply gone.
+
+What it costs, recorded honestly: git no longer shows when a secret changed. That audit
+trail moves into Bitwarden's event log — which is a Teams-tier feature, and part of why the
+machine-account budget pushes to a paid tier rather than being incidental.
+
+- **DB credentials** are still generated on the box by `provision-db.sh` and written
+  straight into a k8s Secret. They could be synced from Bitwarden instead; they aren't,
+  because the shortest path for the highest-value secret is the one that never leaves the
+  machine. Cost: a cluster rebuild re-runs the provisioner, which you'd want anyway since
+  rebuilding means rotating.
+- **App secrets** sync from Bitwarden, `onlyMappedSecrets: true` so the CR lists them
+  explicitly rather than inheriting whatever the machine account can see.
+- **Host secrets** — the cloudflared connector token, Postgres passwords — are outside the
+  cluster and the operator cannot reach them. They stay `0600` files with Bitwarden as
+  vault of record. Deliberate: making cloudflared depend on reaching `bitwarden.com` before
+  it can start puts a network dependency on the one service that recovers you from network
+  problems.
+
+### Non-secret config is not a secrets problem
+
+`PORT`, `NODE_ENV`, hostnames: ConfigMap or literal `env:` in the Deployment, reviewable in
+git. A secrets manager used as a config store adds a moving part between a change and
+production for nothing. `TZ=UTC` is a special case — it belongs in the Dockerfile, because
+it's a property of the image and too load-bearing to be forgettable in a manifest.
+
+Both ConfigMaps and Secrets share one trap: **env vars freeze at process start.** Neither a
+sync nor an edit changes a running pod, so every rotation ends in `kubectl rollout restart`.
+Until that runs, the rotation has happened everywhere except where it matters.
+
+Anything reaching the *browser* is a third category again — Vite inlines it at build time,
+so it's set in CI when the image is built and cannot be secret by construction.
 
 ### The bootstrap secret is irreducible
 
 Every scheme bottoms out in one credential placed out-of-band — an age key, a Sealed
-Secrets keypair, an ESO machine token, a cloud KMS credential. You choose *what* it is,
-not whether you have one. The consolation: one key is far easier to guard well than a
-dozen passwords.
+Secrets keypair, a machine-account token, a cloud KMS credential. You choose *what* it is,
+not whether you have one. Moving to Bitwarden changed which secret it is, not that there is
+one. The consolation: one credential is far easier to guard well than a dozen passwords.
+
+Two properties make the machine token the better choice than an age key, though: it is
+read-only and revocable from a dashboard, and it is **regenerable**. Losing the age key
+orphaned every encrypted secret in git permanently; losing the token means minting a new
+one.
 
 Note that encryption-at-rest (`--secret-encryption`, or disk encryption) protects
 **backups and stolen disks**, not root on the box — the key sits beside the data. Root
 compromise is the game-over event either way, which is why effort belongs on anything
 that copies bytes *off* the box.
+
+### Machine accounts
+
+One per consumer, each scoped to the minimum projects, because the scope *is* the access
+control — a `BitwardenSecret` can only surface what its token already reads.
+
+| Account | Reads | Used by |
+| --- | --- | --- |
+| cluster | `platform`, `puckprophet` | `sm-operator` in k3s |
+| `github-ci-puckprophet` | `puckprophet` | GitHub Actions, via `bitwarden/sm-action` |
+
+The count matters: machine accounts are budgeted per tier, and the third or fourth is what
+tips this into Teams at $6/user/mo. That's the same spend that restores the audit log given
+up by moving secrets out of git, so it's one decision, not two.
 
 ### Order of work
 
@@ -277,10 +337,13 @@ that copies bytes *off* the box.
    components.
 2. Enable `--secret-encryption` **before** the first Secret exists, so there's nothing to
    re-encrypt.
-3. Deploy the first app with plain manifests applied by hand — learn the objects before
+3. Install `sm-operator` and prove one secret round-trips, including a deliberate rotation
+   test. Do this before anything depends on it — the pre-v2.1.0 failure mode was a sync that
+   silently stopped after the first success.
+4. Deploy the first app with plain manifests applied by hand — learn the objects before
    adding a reconciliation loop over them.
-4. Then Flux + SOPS. Same Secret names, same `secretKeyRef`, so app manifests don't
-   change. That's what makes deferring it safe rather than a rewrite.
+5. Then Flux. Same Secret names, same `secretKeyRef`, so app manifests don't change. That's
+   what makes deferring it safe rather than a rewrite.
 
 ## 8. Paths not taken (yet)
 
@@ -379,14 +442,13 @@ route-group split survive intact.
    ~~registry~~ → GHCR ✅ · ~~host patching~~ → scheduled auto-reboot ✅
 2. **Rebind Postgres** from `127.0.0.1` to a pod-reachable node IP; add the Service +
    Endpoints. Blocking the first app deploy.
-3. **Where CI's infra credentials live** — `CLOUDFLARE_API_TOKEN` and the R2 state keys.
-   Narrower than it sounds: app secrets are already settled (SOPS + age in git, decrypted
-   by Flux) and the DB password never leaves the box, so this is two values. GitHub Actions
-   secrets with Bitwarden as vault of record adds no component; Bitwarden Secrets Manager
-   (`bws`, projects `platform` + `puckprophet`) buys audit and rotation at the cost of a
-   machine token to guard. Undecided — revisit when the fleet is large enough that manual
-   rotation is real work. Cloudflare's Secrets Store is not a candidate: like their
-   registry, it feeds Cloudflare's runtime, not a k3s cluster on our own box.
+3. ~~**Where CI's infra credentials live**~~ → **Bitwarden Secrets Manager**, resolved
+   2026-08-02 (§7). CI pulls `CLOUDFLARE_API_TOKEN` and the R2 state keys with
+   `bitwarden/sm-action` under the `github-ci-puckprophet` machine account, so nothing is
+   duplicated into GitHub Actions secrets and there is one place to rotate. Remaining:
+   confirm the Teams-tier spend that the machine-account count and the audit log both
+   depend on. Cloudflare's Secrets Store was never a candidate — like their registry, it
+   feeds Cloudflare's runtime, not a k3s cluster on our own box.
 4. **Backups** — per-database `pg_dump` → R2, plus `pg_dumpall --globals-only` for roles.
    Encrypt them: they leave the box. Do before real traffic.
 5. **Terraform bootstrap** — provider pin, R2 backend, import the wildcard record,

@@ -31,7 +31,9 @@ not once per deploy.
 flowchart LR
     subgraph plat["alpina-intelligence @ platform"]
         pg["infra/postgres/<br/>server + provision-db.sh"]
-        k3s["infra/k3s/ (planned)"]
+        cfd["infra/cloudflared/<br/>the only way in"]
+        host["infra/host/<br/>patch + reboot policy"]
+        sm["infra/sm-operator/<br/>Bitwarden → k8s Secrets"]
         tf["infra/terraform/ (planned)"]
     end
     subgraph apps["project repos"]
@@ -47,6 +49,11 @@ flowchart LR
 
 - **Postgres 17** runs as a host Docker container managed by systemd, deliberately
   **outside** k3s and **outside** Terraform — see [`infra/postgres/`](infra/postgres/).
+- **cloudflared** is the only inbound path to the box; no port but `:22` is open — see
+  [`infra/cloudflared/`](infra/cloudflared/).
+- **k3s** is installed and empty — no `Ingress` yet, so nothing is routable.
+- **Secrets** come from Bitwarden Secrets Manager via `sm-operator` — see
+  [`infra/sm-operator/`](infra/sm-operator/).
 - Everything else is still to come. Built up little by little, on purpose.
 
 ## Why the DB is outside the cluster
