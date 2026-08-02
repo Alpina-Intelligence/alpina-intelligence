@@ -102,7 +102,7 @@ most important secrets on this box live outside it:
 | --- | --- | --- |
 | cloudflared connector token | `/etc/cloudflared/cloudflared.env` (systemd) | hand-placed file |
 | Postgres superuser + per-project passwords | `/opt/platform/postgres/` (compose) | hand-placed file |
-| app secrets (`DATABASE_URL`, auth keys) | k8s Secret | **sm-operator** |
+| app secrets (auth keys, API tokens) | k8s Secret | **sm-operator** |
 
 Those two could fetch themselves at boot with `bws get`, and deliberately don't. cloudflared
 is the only path into this box; making it reach `bitwarden.com` before it can start adds a
