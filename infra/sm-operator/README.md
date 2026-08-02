@@ -101,13 +101,25 @@ most important secrets on this box live outside it:
 | Secret | Where | Delivered by |
 | --- | --- | --- |
 | cloudflared connector token | `/etc/cloudflared/cloudflared.env` (systemd) | hand-placed file |
-| Postgres superuser + per-project passwords | `/opt/platform/postgres/` (compose) | hand-placed file |
+| Postgres **superuser** password | `/opt/platform/postgres/.env` (compose) | hand-placed file |
+| Postgres **per-project** passwords | the role itself | `provision-db.sh`, value from Bitwarden |
 | app secrets (auth keys, API tokens) | k8s Secret | **sm-operator** |
 
-Those two could fetch themselves at boot with `bws get`, and deliberately don't. cloudflared
-is the only path into this box; making it reach `bitwarden.com` before it can start adds a
-network dependency to the one service you need in order to recover from network problems.
-Postgres has the same shape — a stack that can't start offline is worse than a `0600` file.
+Those first two could fetch themselves at boot with `bws get`, and deliberately don't.
+cloudflared is the only path into this box; making it reach `bitwarden.com` before it can
+start adds a network dependency to the one service you need in order to recover from network
+problems. The Postgres server has the same shape — a stack that can't start offline is worse
+than a `0600` file.
+
+Per-project database passwords are different, and were moved to Bitwarden on 2026-08-02.
+They aren't read at boot by anything; they're applied to a role once with `ALTER ROLE`, and
+the *client* side is what needs them continuously — which is in-cluster, where the operator
+already reaches. Nothing is stored on the host.
+
+Note the asymmetry that remains: the operator delivers the password to the pods, but the
+`ALTER ROLE` half still runs by hand over SSH. Postgres can't hold two live passwords for a
+role, so rotation is inherently a two-ended change with a brief window where the ends
+disagree. See `infra/postgres/README.md`.
 
 For host secrets Bitwarden is therefore **vault of record, not delivery mechanism**: the
 value is there so it can be found and rotated, and a copy sits on disk so the box boots

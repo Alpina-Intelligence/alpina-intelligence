@@ -9,7 +9,7 @@ why it's one shared instance and what that costs.
 | File | Role |
 | --- | --- |
 | `compose.yaml` | The server: pinned `postgres:17`, named volume, loopback bind. |
-| `provision-db.sh` | **Idempotent** per-project database + role + password. Re-runnable. |
+| `provision-db.sh` | **Idempotent** per-project database + role. Password supplied on stdin. |
 | `platform-postgres.service` | systemd unit — makes it a first-class host service. |
 | `.env.example` | Shape of the superuser secret; real `.env` lives only on the box. |
 
@@ -38,16 +38,44 @@ Back the superuser password up in Bitwarden as `platform/postgres-superuser`.
 
 ## Adding a project
 
+**Mint the password first, in Bitwarden** (`<project>/db-password`, in a project the
+cluster's machine account can read). This script no longer generates one — Bitwarden is the
+source of truth and the value must exist there before it exists anywhere else.
+
+Generate it on your laptop, put it straight into Bitwarden, then apply it:
+
 ```bash
-cd /opt/platform/postgres
-./provision-db.sh blog                  # database `blog`, role `blog_svc`
-./provision-db.sh blog --conn-limit 10  # re-run any time; converges, doesn't rotate
-./provision-db.sh blog --rotate         # deliberately mint a new password
-cat secrets/blog.env                    # → copy into Bitwarden as blog/db-password
+PW=$(openssl rand -hex 32)      # alphanumeric by construction; the script rejects symbols
+printf '%s' "$PW" | ssh alpina 'cd /opt/platform/postgres && ./provision-db.sh blog'
+unset PW
 ```
+
+Re-run any time — it converges. Rotation is the same command with a different value; there
+is no `--rotate`, because supplying a password *is* the rotation.
+
+```bash
+printf '%s' "$PW" | ssh alpina 'cd /opt/platform/postgres && ./provision-db.sh blog --conn-limit 10'
+```
+
+Nothing is written to disk on the host. The cluster gets the same value independently, via
+`sm-operator` syncing it from Bitwarden — so **update Bitwarden and run this in one sitting**,
+or the role and the app will disagree.
 
 Then commit the invocation to this repo's history (a line in this README or a
 follow-up script) so the fleet's databases are documented, not folklore.
+
+### Rotating
+
+1. New value in Bitwarden.
+2. `printf '%s' "$PW" | ssh alpina '… ./provision-db.sh <project>'` — updates the role.
+3. Wait out the operator's 300s refresh, confirm the k8s Secret changed.
+4. `kubectl -n <project> rollout restart deployment/<app>` — env vars freeze at process
+   start, so until this runs the pods are still using the old password and will start
+   failing auth the moment they reconnect.
+
+Steps 2 and 4 bracket a window where the role has the new password and the pods have the
+old one. On a single-replica app that's a brief outage; it is not avoidable without
+Postgres supporting two live passwords per role, which it doesn't.
 
 ### What it guarantees
 

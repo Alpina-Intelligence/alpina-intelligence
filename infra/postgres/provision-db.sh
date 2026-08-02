@@ -2,48 +2,55 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Idempotent per-project provisioning for the shared platform Postgres.
 #
-#   ./provision-db.sh <project> [--conn-limit N] [--rotate]
+#   printf '%s' "$PASSWORD" | ./provision-db.sh <project> [--conn-limit N]
 #
 # Creates (or reconciles) for <project>:
 #   • database  <project>
 #   • role      <project>_svc   — LOGIN, owns the database and its public schema
-#   • a password, written to ./secrets/<project>.env (root-600)
 #   • REVOKE CONNECT ON DATABASE <project> FROM PUBLIC
 #
-# Run it as many times as you like. Re-running does NOT rotate the password: the
-# existing one is read back from ./secrets/<project>.env and re-applied, so the value
-# converges instead of drifting. Use --rotate to deliberately mint a new one.
+# Run it as many times as you like; everything here is `IF NOT EXISTS`-shaped.
 #
-# WHY THIS EXISTS AND initdb/ DOESN'T: docker-entrypoint-initdb.d runs exactly once,
-# on first volume init. It could never provision project #2. Everything here is
-# `IF NOT EXISTS`-shaped so it works against a live cluster.
+# THE PASSWORD COMES FROM STDIN, and this script no longer generates or stores one
+# (revised 2026-08-02). Bitwarden Secrets Manager is the source of truth: you mint the
+# value there, this applies it to the role, and sm-operator syncs it into the cluster.
+# Rotation is the same command with a different value — there is no --rotate, because
+# supplying a password IS the rotation.
+#
+# What that buys: the old flow generated on the box, wrote secrets/<project>.env, and
+# ended with "now copy this into Bitwarden" — a manual step that `--rotate` silently
+# invalidated, so the two could disagree with nothing to notice it. Now there is one
+# authoritative copy and no plaintext file on the host at all.
+#
+# What it costs, recorded honestly: the cluster's Bitwarden machine account can now read
+# the database password, so a stolen bw-auth-token reaches the database. Accepted because
+# that token and the k8s Secret holding the same password live in the same namespace —
+# anyone who can read one can already read the other.
+#
+# WHY THIS EXISTS AND initdb/ DOESN'T: docker-entrypoint-initdb.d runs exactly once, on
+# first volume init. It could never provision project #2.
 #
 # WHY `REVOKE CONNECT … FROM PUBLIC` IS THE IMPORTANT LINE: Postgres does NOT isolate
 # databases by default. The PUBLIC pseudo-role holds CONNECT on every new database, so
 # without this any project's credentials could open any other project's database. This
 # is the single control that makes one shared instance safe for unrelated projects.
 #
-# SECRETS: the generated password is never printed and never passed in argv (where
-# `ps` could see it) — it goes to stdout of `openssl`, into a root-600 file, and into
-# psql over stdin. Read it yourself with `cat secrets/<project>.env` when you need to
-# put it in Bitwarden under `<project>/db-password`.
+# SECRETS: the password is never printed, never written to disk, and never passed in
+# argv (where `ps` would expose it). It goes stdin → shell variable → psql over stdin.
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SECRETS_DIR="${SECRETS_DIR:-$DIR/secrets}"
 CONN_LIMIT=20
-ROTATE=0
 
 die() { echo "error: $*" >&2; exit 1; }
 
 PROJECT="${1:-}"
-[[ -n "$PROJECT" ]] || die "usage: $0 <project> [--conn-limit N] [--rotate]"
+[[ -n "$PROJECT" ]] || die "usage: printf '%s' \"\$PASSWORD\" | $0 <project> [--conn-limit N]"
 shift
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --conn-limit) CONN_LIMIT="${2:-}"; shift 2 ;;
-    --rotate)     ROTATE=1; shift ;;
     *)            die "unknown argument: $1" ;;
   esac
 done
@@ -56,33 +63,29 @@ done
 
 DB="$PROJECT"
 ROLE="${PROJECT}_svc"
-SECRET_FILE="$SECRETS_DIR/$PROJECT.env"
+
+# ── password: from stdin, first line, never echoed ──────────────────────────
+# NOTE: this consumes stdin, so do NOT pipe this script itself into bash while also
+# piping a password — scp it to the box and run it as a file.
+[[ ! -t 0 ]] || die "password must arrive on stdin: printf '%s' \"\$PASSWORD\" | $0 $PROJECT"
+IFS= read -r PASSWORD || true
+[[ -n "$PASSWORD" ]] || die "no password on stdin"
+
+# Alphanumeric by requirement, which is what guarantees the value is safe inside the SQL
+# literal below. Generate with: openssl rand -hex 32
+# (base64 would introduce +/= and is rejected here rather than escaped — a narrower
+# charset is a cheaper defense than getting quoting right.)
+[[ "$PASSWORD" =~ ^[A-Za-z0-9]{16,}$ ]] \
+  || die "password must be >=16 alphanumeric chars (no spaces/symbols). Use: openssl rand -hex 32"
 
 compose() { docker compose --project-directory "$DIR" -f "$DIR/compose.yaml" "$@"; }
 
 # Cheapest reliable liveness check, and portable across compose versions (the
 # `ps --status` flag isn't). Also catches "container up but still initialising".
 # `</dev/null` matters: `compose exec -T` inherits stdin, so without it this check
-# would eat the caller's stdin (e.g. when this script is itself piped into bash).
+# would eat the password we just read.
 compose exec -T postgres pg_isready -U postgres -q </dev/null 2>/dev/null \
   || die "platform postgres is not accepting connections (try: systemctl start platform-postgres)"
-
-# ── password: reuse, or mint ────────────────────────────────────────────────
-mkdir -p "$SECRETS_DIR"
-chmod 700 "$SECRETS_DIR"
-
-if [[ -f "$SECRET_FILE" && $ROTATE -eq 0 ]]; then
-  # shellcheck disable=SC1090
-  PASSWORD="$(grep -oE '^PGPASSWORD=.*' "$SECRET_FILE" | cut -d= -f2-)"
-  [[ -n "$PASSWORD" ]] || die "$SECRET_FILE exists but has no PGPASSWORD line"
-  ACTION="reusing existing password"
-else
-  [[ $ROTATE -eq 1 && -f "$SECRET_FILE" ]] && ACTION="ROTATING password" || ACTION="new password"
-  PASSWORD="$(openssl rand -hex 24)"
-fi
-
-# Hex only, by construction — guarantees the value is safe inside a SQL literal.
-[[ "$PASSWORD" =~ ^[A-Za-z0-9]+$ ]] || die "generated password has unexpected characters"
 
 # ── SQL, all of it re-runnable ──────────────────────────────────────────────
 # `\gexec` runs the text returned by the query, which is how you get a conditional
@@ -112,23 +115,12 @@ REVOKE ALL ON SCHEMA public FROM PUBLIC;
 GRANT USAGE, CREATE ON SCHEMA public TO "$ROLE";
 SQL
 
-# ── record the credential (root-600), never echoed ──────────────────────────
-umask 077
-cat > "$SECRET_FILE" <<ENVFILE
-# Generated by provision-db.sh for project '$PROJECT'. NOT committed.
-# Store in Bitwarden as: $PROJECT/db-password
-PGUSER=$ROLE
-PGPASSWORD=$PASSWORD
-PGDATABASE=$DB
-ENVFILE
-chmod 600 "$SECRET_FILE"
-
 cat <<DONE
 
-✓ provisioned '$PROJECT' ($ACTION)
+✓ provisioned '$PROJECT'
     database          $DB
     role              $ROLE  (CONNECTION LIMIT $CONN_LIMIT)
-    credential file   $SECRET_FILE
+    password          applied from stdin; not stored on this host
 
   The app's connection string, once it runs in k3s:
     postgresql://$ROLE:<password>@postgres:5432/$DB
@@ -136,6 +128,7 @@ cat <<DONE
   'postgres' there is a selector-less k8s Service backed by manual Endpoints pointing
   at this host, so the app never hardcodes an IP.
 
-  Next: copy the password into Bitwarden ($PROJECT/db-password), then into the
-  project's k8s Secret.  cat $SECRET_FILE
+  Next: make sure the SAME value is in Bitwarden as $PROJECT/db-password, in a project
+  the cluster's machine account can read. sm-operator syncs it into the namespace; the
+  pods only pick it up after a rollout restart.
 DONE

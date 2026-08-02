@@ -252,15 +252,16 @@ flowchart LR
         subgraph k8s["k3s"]
             tok["bw-auth-token<br/>(bootstrapped by hand,<br/>per namespace)"]
             op["sm-operator"]
-            s1["Secret: app config"]
-            s2["Secret: DB creds<br/>created on box, NOT synced"]
+            s1["Secret: app secrets<br/>+ DB password"]
         end
-        host["cloudflared / Postgres<br/>0600 files on disk"]
+        pg[("Postgres role<br/>ALTER ROLE, by hand")]
+        host["cloudflared<br/>0600 file on disk"]
     end
     bw -->|"machine account, read-only"| op
     tok --> op
     op --> s1
     m -->|"Flux"| s1
+    bw -.->|"provision-db.sh, stdin"| pg
     bw -.->|"copy of record"| host
 ```
 
@@ -273,13 +274,21 @@ What it costs, recorded honestly: git no longer shows when a secret changed. Tha
 trail moves into Bitwarden's event log — which is a Teams-tier feature, and part of why the
 machine-account budget pushes to a paid tier rather than being incidental.
 
-- **DB credentials** are still generated on the box by `provision-db.sh` and written
-  straight into a k8s Secret. They could be synced from Bitwarden instead; they aren't,
-  because the shortest path for the highest-value secret is the one that never leaves the
-  machine. Cost: a cluster rebuild re-runs the provisioner, which you'd want anyway since
-  rebuilding means rotating.
 - **App secrets** sync from Bitwarden, `onlyMappedSecrets: true` so the CR lists them
   explicitly rather than inheriting whatever the machine account can see.
+- **DB credentials sync from Bitwarden too** (revised same day, superseding "generated on
+  the box and never synced"). The earlier split kept the database password off Bitwarden to
+  narrow blast radius, and it didn't survive contact: `provision-db.sh` ended with *"now
+  copy this into Bitwarden"*, so the value existed in two places with a human step between
+  them — and `--rotate` invalidated the copy silently. **A manual sync step is not a
+  security control, it's a drift generator.** The script now takes the password on stdin and
+  stores nothing; Bitwarden is authoritative and the host keeps no plaintext file.
+
+  The cost, kept rather than dropped: a stolen `bw-auth-token` now reaches the database.
+  Accepted because that token and the k8s Secret holding the same password live in the same
+  namespace — anyone who can read one can already read the other. The exposure genuinely
+  added is a token obtained *without* cluster read access, which is narrower than the
+  failure mode it removes.
 - **Host secrets** — the cloudflared connector token, Postgres passwords — are outside the
   cluster and the operator cannot reach them. They stay `0600` files with Bitwarden as
   vault of record. Deliberate: making cloudflared depend on reaching `bitwarden.com` before
@@ -333,8 +342,8 @@ up by moving secrets out of git, so it's one decision, not two.
 
 ### Order of work
 
-1. `provision-db.sh --k8s-secret` / `--no-file` — kills plaintext files on the box, no new
-   components.
+1. ~~`provision-db.sh --k8s-secret` / `--no-file`~~ → done differently: the script now takes
+   the password on **stdin** and writes no file, with Bitwarden as the source.
 2. Enable `--secret-encryption` **before** the first Secret exists, so there's nothing to
    re-encrypt.
 3. Install `sm-operator` and prove one secret round-trips, including a deliberate rotation
