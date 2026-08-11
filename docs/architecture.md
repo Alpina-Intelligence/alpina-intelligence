@@ -7,23 +7,28 @@ what's described here; nothing here depends on any particular project.
 > Status: **living doc.** Orchestration, routing, infra-as-code and database placement
 > are decided. Deploy mechanism and secret delivery are chosen but not built — see §7.
 
-## 1. Two repos, one boundary
+## 1. One repo, one boundary
+
+Originally two tiers in two *repos* — this substrate, plus one repo per app. Consolidated
+into a monorepo 2026-08-10 (ADR-0001): same boundary, now a directory seam instead of a
+repo seam.
 
 | Concern | Owner |
 | --- | --- |
-| Postgres **server** — container, version, tuning, backups | **this repo** |
-| Per-project database + role provisioning (needs superuser) | **this repo** |
-| k3s cluster bootstrap, ingress, secret encryption | **this repo** |
-| Cloudflare DNS, tunnel, Access — via Terraform | **this repo** |
-| An app's image, manifests, schema, migrations, seed data | **its own repo** |
-| An app's local dev database | **its own repo** |
+| Postgres **server** — container, version, tuning, backups | **`infra/`** |
+| Per-project database + role provisioning (needs superuser) | **`infra/`** |
+| k3s cluster bootstrap, ingress, secret encryption | **`infra/`** |
+| Cloudflare DNS, tunnel, Access — via Terraform | **`infra/`** |
+| An app's image, manifests, schema, migrations, seed data | **`apps/<name>/`** |
+| An app's local dev database | **`apps/<name>/`** |
 
-The rule that makes the split hold: **the Postgres superuser password never leaves this
-tier.** If projects provisioned their own databases they'd each need superuser, and the
-isolation between them would only be as good as whoever remembered to apply it.
+The rule that makes the split hold is unchanged: **the Postgres superuser password never
+leaves the substrate tier.** It lives in Bitwarden and on the host, is used by a hand-run
+`provision-db.sh`, and never enters CI or any app's environment. Repo membership never
+enforced that rule — credential scoping did, and still does.
 
-Adding a project is therefore one small, auditable PR here — once in that project's
-lifetime, not once per deploy.
+Adding a project is therefore one small, auditable PR touching `infra/` — once in that
+project's lifetime, not once per deploy.
 
 ## 2. System context
 
@@ -67,7 +72,7 @@ would earn nothing. Where each routing decision lives is §3.
 | --- | --- | --- |
 | DNS — `*.alpina-intelligence.com` | which tunnel a hostname reaches | Terraform (this repo) |
 | Tunnel ingress | which local address a request goes to | Terraform (this repo) |
-| Traefik | which Service a hostname maps to | an `Ingress` in **the app's repo** |
+| Traefik | which Service a hostname maps to | an `Ingress` in **the app's `deploy/` directory** |
 
 The wildcard is proxied CNAME → `<tunnel-id>.cfargotunnel.com`, so a new subdomain
 resolves with no DNS change at all, and **no `A` record for the box exists in the zone** —
@@ -81,13 +86,14 @@ socket. Expect to be confused by that once.
 
 `cloudflared` can route by hostname — that's how most tunnels are used — and it was
 rejected here. Doing so needs a stable local address per app, which means either
-hand-allocated NodePorts (a number to keep in sync across two repos, forever) or ClusterIPs
+hand-allocated NodePorts (a number to keep in sync between the tunnel config and every
+app, forever) or ClusterIPs
 you don't control. Only one Service can own host `:80`, which is the collision an ingress
 controller exists to resolve. And Traefik is already watching the API server doing exactly
 this job for free.
 
-The rule that follows: **adding an app touches one repo.** A project ships its own
-`Ingress`; the shared tunnel config doesn't move.
+The rule that follows: **adding an app touches one directory.** An app ships its own
+`Ingress` in `apps/<name>/deploy/`; the shared tunnel config doesn't move.
 
 ### Cloudflare Access needs a named hostname
 
@@ -127,10 +133,11 @@ Connector details and the runbook: [`infra/cloudflared/`](../infra/cloudflared/)
 
 Chosen over Docker Compose and Kamal on two grounds:
 
-- **Multi-repo decoupling.** Each repo `kubectl apply`s into its own namespace and never
-  edits a shared file. Port collisions are impossible, and routing moves out of the
-  shared tunnel config into per-repo `Ingress` objects. This is the one dimension where
-  Kubernetes' overhead earns its keep, and it's the direction the fleet is going.
+- **Per-app decoupling.** Each app `kubectl apply`s (later: Flux-reconciles) its own
+  `deploy/` directory into its own namespace and never edits a shared file. Port
+  collisions are impossible, and routing lives in per-app `Ingress` objects instead of
+  the shared tunnel config. This is the one dimension where Kubernetes' overhead earns
+  its keep — it's what lets one repo hold many apps without their deploys coupling.
 - **Learning value.** Declarative manifests, real Deployments/Services/Secrets,
   GitOps-ready. Explicitly favouring durable patterns over shipping in the fewest steps.
 
@@ -209,7 +216,9 @@ needs no inbound access at all: a controller reaches out to git, same posture as
 `cloudflared`. **That, not secret handling, is the argument for GitOps here.**
 
 Chosen: **Flux** over Argo — ~100MB vs 400MB+, and no web UI to expose and protect.
-Multi-repo is native: one `GitRepository`/`Kustomization` per project, registered here.
+One `GitRepository` (this repo) plus a path-scoped `Kustomization` per app
+(`path: ./apps/<name>/deploy`), registered in `infra/` — the monorepo equivalent of the
+original per-repo registration.
 
 ### Registry — GHCR
 

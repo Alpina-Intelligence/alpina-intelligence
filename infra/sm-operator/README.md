@@ -12,7 +12,7 @@ that section for the reasoning; this file is how to run it.
 | File | Role |
 | --- | --- |
 | `helmchart.yaml` | k3s `HelmChart` CRD — the pinned install. |
-| `bitwardensecret.example.yaml` | Reference shape for a per-app sync. Real ones live in project repos. |
+| `bitwardensecret.example.yaml` | Reference shape for a per-app sync. Real ones live in `apps/<name>/deploy/`. |
 
 ## Install
 
