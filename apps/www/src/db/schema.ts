@@ -1,6 +1,10 @@
 /**
  * Drizzle schema — drizzle-orm 0.45.x (stable). Mind the AGENTS.md gotcha:
  * this is the 0.x API surface; the docs' main pages describe 1.0.
+ *
+ * Identifier discipline (src/lib/ids.ts, from oraq ADR-0034): UUIDv7 text PK
+ * minted app-side ($defaultFn), never shown in URLs; `public_id` is the
+ * stable external name; `slug` is the editorial, SEO-facing URL — mutable.
  */
 import {
 	integer,
@@ -9,11 +13,17 @@ import {
 	timestamp,
 	uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { newId, newPublicId } from "#/lib/ids.ts";
 
 export const posts = pgTable(
 	"posts",
 	{
-		id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => newId()),
+		publicId: text("public_id")
+			.notNull()
+			.$defaultFn(() => newPublicId("post")),
 		slug: text("slug").notNull(),
 		title: text("title").notNull(),
 		summary: text("summary").notNull(),
@@ -26,5 +36,8 @@ export const posts = pgTable(
 			.notNull()
 			.defaultNow(),
 	},
-	(t) => [uniqueIndex("posts_slug_idx").on(t.slug)],
+	(t) => [
+		uniqueIndex("posts_slug_idx").on(t.slug),
+		uniqueIndex("posts_public_id_idx").on(t.publicId),
+	],
 );

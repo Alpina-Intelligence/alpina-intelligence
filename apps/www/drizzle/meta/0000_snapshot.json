@@ -1,5 +1,5 @@
 {
-  "id": "03902294-1832-4426-933c-1885c8510c00",
+  "id": "f86c6691-0554-4db8-9fc3-69ddc890ca40",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -10,20 +10,15 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "integer",
+          "type": "text",
           "primaryKey": true,
-          "notNull": true,
-          "identity": {
-            "type": "always",
-            "name": "posts_id_seq",
-            "schema": "public",
-            "increment": "1",
-            "startWith": "1",
-            "minValue": "1",
-            "maxValue": "2147483647",
-            "cache": "1",
-            "cycle": false
-          }
+          "notNull": true
+        },
+        "public_id": {
+          "name": "public_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
         },
         "slug": {
           "name": "slug",
@@ -76,6 +71,21 @@
           "columns": [
             {
               "expression": "slug",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "posts_public_id_idx": {
+          "name": "posts_public_id_idx",
+          "columns": [
+            {
+              "expression": "public_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
