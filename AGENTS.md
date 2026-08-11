@@ -53,7 +53,13 @@ behind a Cloudflare tunnel; no inbound ports but `:22`.
   forms/styling rules and the CLI reference; the `shadcn` MCP server (`.mcp.json`)
   provides live registry search and component sources. Use both rather than guessing
   component APIs; the skill activates on any project with a `components.json`.
-- For visual/aesthetic direction on new UI, load the `frontend-design` skill.
+- **Cloudflare skills are vendor-direct:** `cloudflare` + `wrangler` installed from
+  `cloudflare/skills` (GitHub) via skills.sh into `.agents/skills/`, same channel as
+  shadcn. More from that repo (`workers-best-practices`, `durable-objects`, …) are one
+  `bunx skills add cloudflare/skills --skill <name>` away. No Claude-marketplace
+  plugins: the `claude-plugins-official` copies were cleared 2026-08-11 (they were
+  verbatim mirrors of `cloudflare/skills` anyway); the `frontend-design` plugin went
+  with them — aesthetic conventions live in this file (theming, icons, base library).
 - **Icons are Phosphor-only** (`@phosphor-icons/react`) in every alpina frontend;
   `lucide-react` is banned. `components.json` still says `lucide` (shadcn has no
   phosphor option), so part of landing any `shadcn add` is swapping the generated
