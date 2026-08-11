@@ -11,7 +11,10 @@ const config = defineConfig({
 	resolve: { tsconfigPaths: true },
 	plugins: [
 		devtools(),
-		nitro({ rollupConfig: { external: [/^@sentry\//] } }),
+		// Bun end to end (dev, CI, prod) - one runtime, no dev/prod skew. Code
+		// stays runtime-portable (postgres-js, node:crypto) so reverting to the
+		// node-server preset remains a one-line change if Bun ever misbehaves.
+		nitro({ preset: "bun", rollupConfig: { external: [/^@sentry\//] } }),
 		tailwindcss(),
 		tanstackStart(),
 		viteReact(),

@@ -1,7 +1,8 @@
 /**
- * DB client singleton. postgres-js driver: works under Bun (dev) and Node
- * (deployed nitro output) alike. Import ONLY from server code — loaders'
- * server functions, server routes — never from components.
+ * DB client singleton. postgres-js driver: runtime-portable by design - Bun
+ * runs everything (dev + deployed nitro `bun` preset), but nothing here would
+ * break under Node if the preset ever flips back. Import ONLY from server
+ * code - loaders' server functions, server routes - never from components.
  */
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
