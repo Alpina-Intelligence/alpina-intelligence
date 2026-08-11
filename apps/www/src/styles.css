@@ -1,0 +1,317 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=VT323&display=swap');
+/* Self-hosted (fontsource): DejaVu Sans Mono — the Bitstream Vera lineage the
+   terminal itself renders in; the crt theme's body face. */
+@import '@fontsource/dejavu-mono/400.css';
+@import '@fontsource/dejavu-mono/700.css';
+@import 'tailwindcss';
+/* Base UI state variants (data-horizontal, data-active, …) used by the
+   base-nova components — required since components.json style is base-nova. */
+@import 'shadcn/tailwind.css';
+@plugin '@tailwindcss/typography';
+
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+/* ───────────────────────────── Theme tokens ─────────────────────────────
+   Everything visual flows from these raw custom properties. Components only
+   speak the semantic utilities (`bg-background`, `text-primary`, …) that
+   `@theme inline` derives below, so a theme is pure data:
+
+     axis 1 — palette:  :root (lagoon, default) · [data-theme='larch'] ·
+                        [data-theme='crt'] (amber phosphor, from omp dark-retro)
+     axis 2 — mode:     .dark composes with either palette
+
+   Adding a theme = one light block + one dark block redefining the same
+   names, plus its entry in the ThemeControls cycle. Nothing else changes.
+
+   `--glow-a/--glow-b` are the only non-shadcn tokens: the page atmosphere
+   (body gradient), declared here so each theme owns its own weather.
+
+   Fonts and radius are theme data too: `--app-font-sans/--app-font-display`
+   and `--radius` are raw tokens routed through `@theme inline`, so a theme
+   may swap the whole typographic voice (crt → monospace, radius 0).        */
+
+/* lagoon — glacial teal. The house palette. */
+:root {
+  color-scheme: light;
+
+  --app-font-sans: 'Manrope', ui-sans-serif, system-ui, sans-serif;
+  --app-font-display: 'Fraunces', Georgia, serif;
+  --app-font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  --background: oklch(0.976 0.011 175);
+  --foreground: oklch(0.31 0.045 215);
+  --card: oklch(0.995 0.004 170);
+  --card-foreground: oklch(0.31 0.045 215);
+  --popover: oklch(0.995 0.004 170);
+  --popover-foreground: oklch(0.31 0.045 215);
+  --primary: oklch(0.5 0.085 200);
+  --primary-foreground: oklch(0.985 0.008 175);
+  --secondary: oklch(0.93 0.022 172);
+  --secondary-foreground: oklch(0.35 0.05 210);
+  --muted: oklch(0.94 0.016 172);
+  --muted-foreground: oklch(0.51 0.035 208);
+  --accent: oklch(0.91 0.032 180);
+  --accent-foreground: oklch(0.32 0.05 205);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.577 0.245 27.325);
+  --success: oklch(0.55 0.13 145);
+  --warning: oklch(0.68 0.13 80);
+  --info: oklch(0.55 0.1 235);
+  --border: oklch(0.875 0.022 185);
+  --input: oklch(0.875 0.022 185);
+  --ring: oklch(0.62 0.075 195);
+  --chart-1: oklch(0.6 0.118 184.704);
+  --chart-2: oklch(0.48 0.08 160);
+  --chart-3: oklch(0.646 0.222 41.116);
+  --chart-4: oklch(0.398 0.07 227.392);
+  --chart-5: oklch(0.828 0.189 84.429);
+  --radius: 0.625rem;
+
+  --glow-a: oklch(0.72 0.1 190 / 0.28);
+  --glow-b: oklch(0.48 0.08 160 / 0.14);
+}
+
+.dark {
+  color-scheme: dark;
+
+  --background: oklch(0.165 0.02 215);
+  --foreground: oklch(0.93 0.02 180);
+  --card: oklch(0.205 0.024 212);
+  --card-foreground: oklch(0.93 0.02 180);
+  --popover: oklch(0.205 0.024 212);
+  --popover-foreground: oklch(0.93 0.02 180);
+  --primary: oklch(0.78 0.09 185);
+  --primary-foreground: oklch(0.17 0.03 215);
+  --secondary: oklch(0.255 0.026 210);
+  --secondary-foreground: oklch(0.9 0.025 185);
+  --muted: oklch(0.24 0.022 210);
+  --muted-foreground: oklch(0.68 0.035 192);
+  --accent: oklch(0.285 0.032 202);
+  --accent-foreground: oklch(0.9 0.03 185);
+  --destructive: oklch(0.396 0.141 25.723);
+  --destructive-foreground: oklch(0.637 0.237 25.331);
+  --success: oklch(0.78 0.16 140);
+  --warning: oklch(0.85 0.15 90);
+  --info: oklch(0.72 0.12 245);
+  --border: oklch(0.31 0.03 205);
+  --input: oklch(0.31 0.03 205);
+  --ring: oklch(0.55 0.07 190);
+  --chart-1: oklch(0.696 0.17 162.48);
+  --chart-2: oklch(0.769 0.188 70.08);
+  --chart-3: oklch(0.488 0.243 264.376);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+
+  --glow-a: oklch(0.6 0.09 190 / 0.13);
+  --glow-b: oklch(0.55 0.08 160 / 0.09);
+}
+
+/* larch — autumn alpine: warm paper, gold-amber accents. */
+[data-theme='larch'] {
+  --background: oklch(0.97 0.014 85);
+  --foreground: oklch(0.29 0.028 55);
+  --card: oklch(0.99 0.006 90);
+  --card-foreground: oklch(0.29 0.028 55);
+  --popover: oklch(0.99 0.006 90);
+  --popover-foreground: oklch(0.29 0.028 55);
+  --primary: oklch(0.55 0.125 65);
+  --primary-foreground: oklch(0.985 0.01 90);
+  --secondary: oklch(0.925 0.028 82);
+  --secondary-foreground: oklch(0.34 0.035 58);
+  --muted: oklch(0.93 0.02 84);
+  --muted-foreground: oklch(0.5 0.032 60);
+  --accent: oklch(0.9 0.045 78);
+  --accent-foreground: oklch(0.32 0.04 58);
+  --border: oklch(0.865 0.028 80);
+  --input: oklch(0.865 0.028 80);
+  --ring: oklch(0.65 0.1 70);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.55 0.125 65);
+  --chart-3: oklch(0.48 0.08 160);
+  --chart-4: oklch(0.398 0.07 227.392);
+  --chart-5: oklch(0.828 0.189 84.429);
+
+  --glow-a: oklch(0.75 0.11 75 / 0.3);
+  --glow-b: oklch(0.55 0.1 40 / 0.13);
+}
+
+[data-theme='larch'].dark {
+  --background: oklch(0.17 0.014 55);
+  --foreground: oklch(0.92 0.02 80);
+  --card: oklch(0.21 0.018 55);
+  --card-foreground: oklch(0.92 0.02 80);
+  --popover: oklch(0.21 0.018 55);
+  --popover-foreground: oklch(0.92 0.02 80);
+  --primary: oklch(0.75 0.115 75);
+  --primary-foreground: oklch(0.18 0.025 55);
+  --secondary: oklch(0.26 0.022 58);
+  --secondary-foreground: oklch(0.9 0.025 80);
+  --muted: oklch(0.245 0.02 58);
+  --muted-foreground: oklch(0.68 0.035 72);
+  --accent: oklch(0.29 0.028 62);
+  --accent-foreground: oklch(0.9 0.03 78);
+  --border: oklch(0.315 0.026 60);
+  --input: oklch(0.315 0.026 60);
+  --ring: oklch(0.58 0.09 70);
+
+  --glow-a: oklch(0.62 0.1 70 / 0.13);
+  --glow-b: oklch(0.5 0.09 40 / 0.09);
+}
+
+/* crt — amber phosphor, translated from omp's `dark-retro` TUI theme.
+   Dark is the canonical rendering (a CRT has no light mode); light is
+   "hardcopy": the same amber ramp as ink on terminal paper. Monospace
+   voice and zero radius — terminals have no curves. */
+[data-theme='crt'] {
+  --app-font-sans: 'DejaVu Mono', 'DejaVu Sans Mono', ui-monospace, monospace;
+  --app-font-display: 'VT323', 'DejaVu Mono', monospace;
+  --app-font-mono: 'DejaVu Mono', 'DejaVu Sans Mono', ui-monospace, monospace;
+  --radius: 0rem;
+
+  --background: #f5efdd;
+  --foreground: #4a3200;
+  --card: #faf5e8;
+  --card-foreground: #4a3200;
+  --popover: #faf5e8;
+  --popover-foreground: #4a3200;
+  --primary: #a36f00;
+  --primary-foreground: #faf5e8;
+  --secondary: #ece2c6;
+  --secondary-foreground: #5c3d00;
+  --muted: #eee5cd;
+  --muted-foreground: #8a6200;
+  --accent: #e8dbb8;
+  --accent-foreground: #4a3200;
+  --destructive: #c03535;
+  --destructive-foreground: #c03535;
+  --success: #4d7c28;
+  --warning: #8f6a00;
+  --info: #2f6a99;
+  --border: #d6c8a0;
+  --input: #d6c8a0;
+  --ring: #b37f00;
+  --chart-1: #a36f00;
+  --chart-2: #cc8800;
+  --chart-3: #5c8a3c;
+  --chart-4: #3c6e8a;
+  --chart-5: #c03535;
+
+  --glow-a: rgb(255 176 0 / 0.14);
+  --glow-b: rgb(204 136 0 / 0.08);
+}
+
+/* dark-retro verbatim: text = phosphor #ffb000, surfaces = CRT blacks,
+   border hierarchy = phosphorDim/VeryDim, hover highlight = crtGlow. */
+[data-theme='crt'].dark {
+  --background: #0a0a0a;
+  --foreground: #ffb000;
+  --card: #121008;
+  --card-foreground: #ffb000;
+  --popover: #1a1510;
+  --popover-foreground: #ffb000;
+  --primary: #ffc633;
+  --primary-foreground: #0a0a0a;
+  --secondary: #1a1510;
+  --secondary-foreground: #ffc633;
+  --muted: #1f1a10;
+  --muted-foreground: #cc8800;
+  --accent: #1f1a10;
+  --accent-foreground: #ffe680;
+  --destructive: #ff6b6b;
+  --destructive-foreground: #ff6b6b;
+  /* omp dark-retro verbatim: successGreen / warnYellow / glowBlue */
+  --success: #88dd66;
+  --warning: #ffdd33;
+  --info: #66b3ff;
+  --border: #664400;
+  --input: #664400;
+  --ring: #ffb000;
+  --chart-1: #ffc633;
+  --chart-2: #ffb000;
+  --chart-3: #88dd66;
+  --chart-4: #66b3ff;
+  --chart-5: #ff6b6b;
+
+  --glow-a: rgb(255 176 0 / 0.07);
+  --glow-b: rgb(255 230 128 / 0.04);
+}
+
+/* Headings, the TUI way: omp's dark-retro never bolds headings into a
+   heavier face — hierarchy comes from COLOR (mdHeading = phosphorBright,
+   our --primary) at regular weight. So crt headings run DejaVu 400 in
+   bright amber. h1 (hero-scale) alone keeps the VT323 pixel face, which
+   only reads at display size and ships a single 400 weight. */
+[data-theme='crt'] .font-display {
+  font-family: var(--app-font-mono);
+  font-weight: 400;
+  color: var(--primary);
+}
+[data-theme='crt'] h1.font-display {
+  font-family: var(--app-font-display);
+  letter-spacing: 0.015em;
+}
+
+/* ──────────────────── Tailwind mapping (build-time) ──────────────────── */
+
+@theme inline {
+  --font-sans: var(--app-font-sans);
+  --font-display: var(--app-font-display);
+  --font-mono: var(--app-font-mono);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/* ───────────────────────────── Base styles ───────────────────────────── */
+
+html,
+body,
+#app {
+  min-height: 100%;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    margin: 0;
+    overflow-x: hidden;
+    /* Atmosphere: each theme's weather, from its own glow tokens. */
+    background-image:
+      radial-gradient(1100px 620px at -8% -10%, var(--glow-a), transparent 58%),
+      radial-gradient(1050px 620px at 112% -12%, var(--glow-b), transparent 62%);
+    background-attachment: fixed;
+  }
+}
