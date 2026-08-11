@@ -60,6 +60,11 @@ behind a Cloudflare tunnel; no inbound ports but `:22`.
   plugins: the `claude-plugins-official` copies were cleared 2026-08-11 (they were
   verbatim mirrors of `cloudflare/skills` anyway); the `frontend-design` plugin went
   with them — aesthetic conventions live in this file (theming, icons, base library).
+  Cloudflare's `agent-setup/prompt.md` bootstrap is superseded by this setup; its one
+  addition we took (2026-08-11) is the public `cloudflare-docs` MCP server in
+  `.mcp.json` (live doc search — the skill prefers it over webFetch). The OAuth'd
+  siblings (`mcp.cloudflare.com`, `bindings`, `builds`, `observability`) are deferred
+  until Workers actually deploy from this repo.
 - **Icons are Phosphor-only** (`@phosphor-icons/react`) in every alpina frontend;
   `lucide-react` is banned. `components.json` still says `lucide` (shadcn has no
   phosphor option), so part of landing any `shadcn add` is swapping the generated
