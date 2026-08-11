@@ -1,11 +1,14 @@
 # Platform architecture
 
-The shared substrate: one Hetzner VPS, reached only through a Cloudflare tunnel, running
-k3s for apps and a shared Postgres for their data. Every project on the box depends on
+The shared substrate: one Hetzner VPS running the shared Postgres, plus Cloudflare's
+edge, where HTTP apps now deploy as Workers (ADR-0003). Every project depends on
 what's described here; nothing here depends on any particular project.
 
-> Status: **living doc.** Orchestration, routing, infra-as-code and database placement
-> are decided. Deploy mechanism and secret delivery are chosen but not built — see §7.
+> Status: **living doc, partially superseded.** §2–3 (tunnel/Traefik/k3s ingress) and
+> the k3s/Flux deploy mechanism describe the pre-Workers design — **superseded by
+> ADR-0003** (2026-08-11): HTTP apps deploy to Cloudflare Workers from `apps/<name>/`,
+> `cloudflared` is stopped, k3s is shelved. Database placement (§4–6) and the secrets
+> model (§7) remain current.
 
 ## 1. One repo, one boundary
 

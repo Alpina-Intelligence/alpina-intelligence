@@ -7,9 +7,10 @@ Read the relevant ADR before changing related design.
 ## What this is
 
 All Alpina projects in one repo (ADR-0001): shared substrate (`infra/` — Postgres,
-cloudflared, k3s, sm-operator), deployable apps (`apps/*`, grouped by deployable unit,
-not language — ADR-0002), shared libs (`packages-ts/`, `packages-py/`). One Hetzner VPS
-behind a Cloudflare tunnel; no inbound ports but `:22`.
+sm-operator; cloudflared/k3s deprecated per ADR-0003), deployable apps (`apps/*`,
+grouped by deployable unit, not language — ADR-0002), shared libs (`packages-ts/`,
+`packages-py/`). HTTP apps deploy to Cloudflare Workers (ADR-0003); the Hetzner VPS
+keeps the shared Postgres, reachable only via `:22`.
 
 ## Workspace rules (ADR-0002)
 
@@ -87,9 +88,10 @@ behind a Cloudflare tunnel; no inbound ports but `:22`.
 - **The Postgres superuser password never enters CI, an app env, or this repo.**
   Provisioning (`infra/postgres/provision-db.sh`) is hand-run; per-app credentials come
   from Bitwarden via sm-operator.
-- App deploy manifests live in `apps/<name>/deploy/`; the shared tunnel/Terraform config
-  changes only when an *auth boundary* is added, never per app.
-- Docker builds always use the repo root as context: `docker build -f apps/<name>/Dockerfile .`
+- HTTP apps deploy to Workers (ADR-0003): each owns `apps/<name>/wrangler.jsonc`
+  (worker name = app dir name), deploys via `bun run deploy` (= `vite build &&
+  wrangler deploy`); custom domains are `routes` in that file. The k3s/`deploy/`
+  manifest path and Docker-image builds are shelved with ADR-0003.
 - **Database naming contract:** app dir name = database name = role prefix
   (`apps/www` → DB `www`, role `www_svc`) — derived by code at both tiers, never
   chosen freely. Apps read only libpq vars (`PGHOST/PGPORT/PGDATABASE/PGUSER/

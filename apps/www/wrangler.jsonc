@@ -1,0 +1,15 @@
+{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	// Worker name = app dir name, same derivation rule as the DB contract.
+	"name": "www",
+	"main": "@tanstack/react-start/server-entry",
+	"compatibility_date": "2026-08-01",
+	"compatibility_flags": ["nodejs_compat"],
+	"routes": [
+		{ "pattern": "alpina-intelligence.com", "custom_domain": true },
+		{ "pattern": "www.alpina-intelligence.com", "custom_domain": true }
+	],
+	"observability": {
+		"enabled": true
+	}
+}

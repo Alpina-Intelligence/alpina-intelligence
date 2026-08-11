@@ -1,3 +1,10 @@
+> **DEPRECATED 2026-08-11 (ADR-0003).** HTTP ingress moved to Cloudflare
+> Workers; `cloudflared` is stopped and disabled on the VPS (unit + env file
+> left in place). The wildcard DNS record should be deleted from the zone.
+> A tunnel may return in a narrower shape — TCP-only, as a Hyperdrive origin
+> for the VPS Postgres — under its own ADR. Everything below describes the
+> deprecated HTTP-ingress design.
+
 # cloudflared (host service on the VPS)
 
 The tunnel connector. It is the **only** path from the internet to this box — no inbound
