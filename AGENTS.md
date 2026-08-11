@@ -40,6 +40,14 @@ behind a Cloudflare tunnel; no inbound ports but `:22`.
     `bunx @tanstack/intent install --map` (run in `apps/www`). Re-run it after any
     dependency bump so the map can't lag the lockfile. Belongs in the post-install
     path once a justfile exists.
+- **Drizzle ORM: retrieve from official docs, never pre-trained knowledge or
+  third-party skills** (none are vendor-maintained; we checked). Index:
+  `https://orm.drizzle.team/llms.txt`; pinpoint lookups:
+  `curl -s https://orm.drizzle.team/llms-full.txt | grep -A20 <term>` (3.6MB full
+  dump). CRITICAL version gotcha: stable 0.x and the 1.0 beta have incompatible
+  relations APIs (`relations()` per table + `where: eq(...)` vs one
+  `defineRelations()` + object-style `where`) — check the installed `drizzle-orm`
+  version in the app's package.json first; the docs' main pages describe 1.0.
 - **shadcn/ui:** the `shadcn` skill (`.agents/skills/shadcn`, installed via skills.sh —
   `skills-lock.json` tracks it, `bunx skills update` refreshes it) carries composition/
   forms/styling rules and the CLI reference; the `shadcn` MCP server (`.mcp.json`)
