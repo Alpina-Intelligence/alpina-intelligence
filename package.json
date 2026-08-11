@@ -1,0 +1,11 @@
+{
+  "name": "alpina-intelligence",
+  "private": true,
+  "workspaces": {
+    "packages": [
+      "apps/*",
+      "packages-ts/*"
+    ],
+    "catalog": {}
+  }
+}

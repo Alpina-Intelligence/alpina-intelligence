@@ -1,0 +1,28 @@
+# Virtual workspace root for the alpina-intelligence monorepo (ADR-0002).
+#
+# No [project] table ON PURPOSE: this root is not a package — it only groups the
+# workspace members and produces ONE shared uv.lock + one .venv across them all.
+# Members are deployable apps (apps/*, any that carry a pyproject.toml) and shared
+# Python packages (packages-py/*, the alpina.* PEP 420 namespace — created lazily,
+# see ADR-0002 "distribution vs module").
+[tool.uv.workspace]
+members = ["apps/*", "packages-py/*"]
+# apps/ is grouped by deployable unit, not language (ADR-0002) — TS apps live alongside
+# the Python ones but belong to the Bun workspace (package.json "workspaces"). uv ERRORS
+# on a members match without a pyproject.toml, so every TS app needs an explicit entry
+# here. Loud failure is the point: `uv sync` refuses until the new app is classified.
+exclude = [
+    "apps/www", # TS: TanStack Start main site (Bun workspace)
+]
+
+# Workspace-wide dev tooling lives here (PEP 735 dependency group — no [project] table
+# required) so every member is linted/type-checked/tested with the same versions.
+# Container builds use `uv sync --no-default-groups` so none of this ships in images.
+[dependency-groups]
+dev = [
+    "ruff>=0.13",
+    "pytest>=8",
+]
+
+[tool.ruff]
+line-length = 100

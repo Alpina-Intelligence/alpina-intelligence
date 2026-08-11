@@ -1,0 +1,19 @@
+# Workspace-wide install policy (ADR-0002 §supply chain).
+#
+# Lifecycle scripts (postinstall etc.) are BLOCKED by default in Bun; the allowlist is
+# `trustedDependencies` in the root package.json — add entries there sparingly, with a
+# comment-by-convention in the PR explaining why each package needs to run code at
+# install time.
+
+[install]
+# Refuse any dependency version published more recently than this (seconds). A
+# compromised release is usually caught by the ecosystem within hours; a 3-day cooldown
+# means we never install one in its window. GOTCHA (learned elsewhere): this validates
+# the EXISTING lockfile too — raising it while a locked entry is younger than the new
+# cutoff breaks `bun install` until the entry ages past it. Raise gradually.
+minimumReleaseAge = 259200
+
+# Security-fix releases shouldn't wait out the cooldown; exempt nothing yet, but this is
+# the knob: minimumReleaseAgeExcludes = ["@alpina/*"]
+
+exact = true

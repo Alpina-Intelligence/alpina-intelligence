@@ -20,3 +20,22 @@ crash.log
 # Editor / OS noise
 .DS_Store
 *.swp
+
+# Workspace / toolchain artifacts (ADR-0002) — both prior monorepos leaked build
+# output into git; keep this list ahead of the first member.
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+dist/
+.output/
+.nitro/
+.tanstack/
+storybook-static/
+
+# Agent tooling session artifacts
+.playwright-mcp/
+.claude/
