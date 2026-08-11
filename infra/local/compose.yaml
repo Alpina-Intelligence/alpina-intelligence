@@ -1,0 +1,50 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Local-dev backing store for the apps in this monorepo.
+#
+# Port 5434, NOT 5432/5433: the default port belongs to whatever work stack owns
+# it today, and 5433 is puck-prophet's local DB. A shared Postgres cross-
+# contaminates databases between unrelated projects; the named volume is
+# project-scoped too (`name:` below prefixes it), so `docker compose down -v`
+# here can never wipe a neighbour's data.
+#
+# Version parity: postgres:17 matches infra/postgres/compose.yaml (the shared
+# prod server) — dev/prod major-version drift is how migration surprises ship.
+#
+# Passwords come from infra/local/.env.local (fake, local-only, gitignored).
+# Create it from .env.local.example.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: alpina-local
+
+services:
+  postgres:
+    image: postgres:17
+    # unless-stopped: a bounced container mid-task is worse than a stale one,
+    # and a deliberate `docker compose down` (or `docker stop`) still sticks.
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in infra/local/.env.local}
+      POSTGRES_DB: postgres
+      # Consumed by initdb/01-roles-and-dbs.sh to mint the app roles.
+      #
+      # Deliberate rename across the boundary: the FILE key is PGPASSWORD (the
+      # libpq name, so apps, drizzle-kit and psql on the host all read the same
+      # key with no second copy), but inside the container it becomes
+      # APP_DB_PASSWORD — a bare PGPASSWORD in the server's own environment
+      # would be picked up by libpq for every psql the entrypoint runs, which
+      # is not what it means here.
+      APP_DB_PASSWORD: ${PGPASSWORD:?set in infra/local/.env.local}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./initdb:/docker-entrypoint-initdb.d:ro # runs ONCE, on first init only
+    ports:
+      - '5434:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:
