@@ -9,6 +9,10 @@
 		{ "pattern": "alpina-intelligence.com", "custom_domain": true },
 		{ "pattern": "www.alpina-intelligence.com", "custom_domain": true }
 	],
+	// No side doors around Cloudflare Access: the zone hostnames above are the
+	// ONLY ingress. workers.dev + per-version preview URLs stay off.
+	"workers_dev": false,
+	"preview_urls": false,
 	"observability": {
 		"enabled": true
 	}
