@@ -117,6 +117,12 @@ keeps the shared Postgres, reachable only via `:22`.
   into a session env or written to disk. The machine account behind it is scoped to
   the SM project **`platform`** (`7007b64e-b136-4a7c-ab23-b4910179952f`, org
   `1e847db2-0efb-4c9d-ac5b-b3890164b6a1`).
+- **Cloudflare Access provisioning is agent-drivable:** `CLOUDFLARE_ACCESS_TOKEN`
+  (SM secret `3f9aec0a-…`, account-owned, scoped to Access apps/policies + orgs/IdPs)
+  drives the Access API via `bwsl secret get … | jq -r .value` per-invocation. The
+  Zero Trust org is `alpina-intelligence.cloudflareaccess.com` (One-time PIN IdP);
+  the site sits behind app `www (pre-launch gate)` until launch — un-gating is
+  deleting that app, no code change.
 - **Provisioning a deployed app's DB credential** (the 2026-08-02 flow — Bitwarden
   authoritative, nothing durable on any host):
   1. mint + store: `bwsl secret create PGPASSWORD "$(openssl rand -hex 32)" <project-id>`
