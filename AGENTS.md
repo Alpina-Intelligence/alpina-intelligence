@@ -29,6 +29,11 @@ always-on daemons, reachable only via `:22`.
   belongs to one app.
 - Python shared code lives in the `alpina.*` PEP 420 namespace. Never create
   `src/alpina/__init__.py`.
+- **Every import must be a declared dependency, and "it resolves" is not proof.**
+  `@cloudflare/vite-plugin` and `wrangler` were imported, scripted and `$schema`-referenced
+  while absent from every `package.json` *and* from `bun.lock` — present only as orphaned
+  installs on one laptop, so a clean checkout could not build. Check `bun.lock`, not
+  `node_modules/`.
 
 ## Frontend (TanStack Start / Query / Router + shadcn/ui)
 
@@ -53,6 +58,8 @@ always-on daemons, reachable only via `:22`.
     `react-router` 1.170.23, `router-core` 1.171.19) against this file's own
     "bump the whole family together" rule. Consequence: no server-route API
     (`server` on `createFileRoute`) — fix by bumping the family as one change.
+  - **`@tanstack/devtools-vite` declares `vite ^6 || ^7`** while the app runs `vite ^8`.
+    Unresolved peer mismatch; fold into the same family bump.
 - **Drizzle ORM: retrieve from official docs, never pre-trained knowledge or
   third-party skills** (none are vendor-maintained; we checked). Index:
   `https://orm.drizzle.team/llms.txt`; pinpoint lookups:
@@ -141,6 +148,24 @@ always-on daemons, reachable only via `:22`.
 - **NEVER rescale, resize, or rebuild the Hetzner box** (ADR-0004). It holds a
   grandfathered CPX41 price ($46.49/mo; $141.49 to re-order after 2026-06-15) and any of
   those actions forfeits it permanently — Ashburn carries no cost-optimized line.
+- **PlanetScale operational traps** (details in
+  [`infra/planetscale/README.md`](infra/planetscale/README.md), reasoning in ADR-0005):
+  - Port is **5432**. Roles are created **on the platform**, logical databases in **SQL**;
+    roles-first collapses all the SQL into one session.
+  - You *connect* as `<role-id>.<branch-id>` but reference the **bare `<role-id>`** in
+    `GRANT`/`REVOKE`. Mixing them yields confusing "role does not exist" errors.
+  - Role permissions are **cluster-wide**; `REVOKE CONNECT … FROM PUBLIC` + selective
+    `GRANT CONNECT` is the *entire* isolation boundary. Verify with
+    `has_database_privilege`, never assume.
+  - **`pg_strict` is per-role Query safety** (*Settings → Roles → `<role>` → Edit*), not an
+    Extensions-tab item, and **SQL cannot set it** (needs `ADMIN OPTION` / superuser, which
+    the Default role lacks). It is **invisible to `pg_db_role_setting`** — audit by
+    connecting as the role and reading `current_setting('pg_strict.…', true)`.
+  - Restart-gated extensions (`pg_stat_statements`, `pg_duckdb`, `timescaledb`, `pg_cron`)
+    live under *Clusters → Branch → Extensions → Queue → Apply* and can **only** be enabled
+    there. `pgvector` needs no restart.
+  - `CONNECT` on the `postgres` maintenance DB is **deliberately left open** — `datacl` is
+    NULL, so every `pscale_*` role rides the implicit PUBLIC grant and a pooler fronts 5432.
 
 ## Secrets
 
@@ -152,6 +177,15 @@ always-on daemons, reachable only via `:22`.
   into a session env or written to disk. The machine account behind it is scoped to
   the SM project **`platform`** (`7007b64e-b136-4a7c-ab23-b4910179952f`, org
   `1e847db2-0efb-4c9d-ac5b-b3890164b6a1`).
+- **Bitwarden free tier: unlimited secrets, but 3 projects and 3 machine accounts.**
+  Projects are the scarce resource *and* the access boundary machine accounts are scoped
+  to — never a folder. So group by **consumer identity**, not by app: an `alpina-site`-style
+  per-app project burns a capped slot on a boundary that separates nothing, because
+  `<db>_svc` (pasted once into Hyperdrive, never read at runtime) and `<db>_migrator`
+  (held by CI) have nothing in common as credentials. Target split: `platform`
+  (admin/bootstrap, dev only) · `ci` (only what Actions reads) · one spare for Modal.
+  A machine account may be granted several projects, so only genuinely separate identities
+  consume the 3. **CI must never be able to read `PLANETSCALE_ADMIN_URL`.**
 - **Cloudflare Access provisioning is agent-drivable:** `CLOUDFLARE_ACCESS_TOKEN`
   (SM secret `3f9aec0a-…`, account-owned, scoped to Access apps/policies + orgs/IdPs)
   drives the Access API via `bwsl secret get … | jq -r .value` per-invocation. The
@@ -178,6 +212,43 @@ always-on daemons, reachable only via `:22`.
   `<db>_migrator` URL at run time. The sm-operator / `apps/<name>/deploy/bitwardensecret.yaml`
   / `kubectl rollout restart` path is shelved with ADR-0003 and dead for deployed DBs under
   ADR-0004.
+
+## Toolchain traps hit in practice
+
+One line each; the reasoning lives in the ADR or the file's own comment.
+
+- **`postgres:18` changed the image's data layout.** 18+ stores data in
+  major-version-specific subdirectories, and the entrypoint *hard-refuses to start* against
+  a volume mounted at the old `/var/lib/postgresql/data`. Mount `/var/lib/postgresql`.
+- **Local Postgres tracks the DEPLOYED major (18.x), not the legacy box.** The old parity
+  comment pointed at a server ADR-0004 demoted, so drift shipped silently. Extension parity
+  is unattainable and not the goal: no stock image ships `pg_strict`, so its guard is
+  deployed-only — an unqualified `db.delete(table)` succeeds locally, is refused deployed.
+- **postgres-js cannot read libpq URLs.** It forwards unknown query params as Postgres
+  *runtime* parameters, so `?sslrootcert=system` becomes `SET sslrootcert` →
+  `42704 unrecognized configuration parameter`. Bitwarden keeps the libpq-correct form (so
+  `psql` verifies by default); `pgDriverConfig()` in `apps/www/src/db/env.ts` lifts them
+  into `ssl: 'verify-full'`. Workers are unaffected — Hyperdrive's string has no SSL params.
+- **`drizzle-kit migrate` exits 0 without applying anything** when it cannot prompt. Silent
+  failure in CI. Migrations run through `apps/www/src/db/migrate.ts` (drizzle-orm's
+  programmatic migrator). Do not restore the CLI in the CI path.
+- **`apps/www/worker-configuration.d.ts` is tracked deliberately** — the only place
+  `env.HYPERDRIVE` is typed, so a fresh clone must typecheck before anyone runs
+  `wrangler types`. Regenerate after editing `wrangler.jsonc`; `wrangler types --check`
+  asserts freshness and is what makes committed generated types trustworthy.
+- **A `hyperdrive` binding requires `id`** (schema-required), and Hyperdrive validates
+  connectivity before creating a config — so the binding cannot be declared, even for
+  local-only dev, until the database and role exist.
+- **Worker placement is `{ mode }` XOR `{ region }` XOR `{ host }`.** For one back-end in a
+  known cloud region use `"placement": { "region": "aws:ca-central-1" }`, not `mode: smart`.
+- **`bun run <script>` is per-workspace-member.** `build`/`check`/`db:*` live in
+  `apps/www/package.json`; running them from the repo root fails with "Script not found".
+
+## Git
+
+- **Work happens on the `platform` branch**, which is 28 commits ahead of `main` and shares
+  no recent history with it (`main` is the pre-restart line). `platform` has **no upstream**
+  and has never been pushed — first push is `git push -u origin platform`.
 
 ## GitHub account
 
