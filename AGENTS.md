@@ -249,14 +249,20 @@ One line each; the reasoning lives in the ADR or the file's own comment.
 - **Work happens on the `platform` branch**, tracking `origin/platform`. It is 28 commits
   ahead of `main` and shares no recent history with it: `main` (`e332e00`) is the
   pre-restart line, deliberately left alone, and no PR is open against it.
-- **`git push` needs credentials supplied explicitly.** `origin` is HTTPS with **no**
-  `credential.helper` configured, so a bare `git push` hangs on an interactive prompt.
-  Per-invocation, nothing persisted to config:
-
-  ```bash
-  GH_TOKEN="$(gh auth token --user eric-austin)" \
-    git -c credential."https://github.com".helper='!gh auth git-credential' push
-  ```
+- **Bare `git` commands are already correct inside `~/dev/` — inject nothing.**
+  `~/.gitconfig`'s `includeIf gitdir:~/dev/` pulls in `~/.gitconfig-personal`, which pins
+  *both* the commit email and a URL-scoped credential helper that mints a token with
+  `gh auth token --user eric-austin` per invocation. It deliberately sets an empty helper
+  first to clear inherited ones, so the work account cannot leak in. `git push` needs no
+  `GH_TOKEN`, no `-c credential.…`, and never prompts.
+  - Diagnosing this is a trap: `git config --get credential.helper` reads only the
+    *unscoped* key and reports nothing here. Use
+    `git config --show-origin --get-regexp '^credential'`.
+  - SSH is configured for the **work** account only (`Host github-work` → `id_oraq`).
+    Personal access is HTTPS + that helper, by design — not SSH.
+- **The `gh` CLI is the exception.** Its *active account* is global mutable state, so `gh`
+  calls still want the per-invocation pin from the GitHub account section below. `git` does
+  not.
 
 ## GitHub account
 
