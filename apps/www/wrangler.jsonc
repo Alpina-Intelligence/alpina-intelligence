@@ -13,6 +13,17 @@
 	// ONLY ingress. workers.dev + per-version preview URLs stay off.
 	"workers_dev": false,
 	"preview_urls": false,
+	// Deployed DB access (ADR-0005). Query caching is disabled on the config
+	// itself, so no read path can serve stale auth/session state. Local dev gets
+	// the origin from CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE
+	// (.envrc) — never "localConnectionString" here, this file is committed.
+	"hyperdrive": [
+		{ "binding": "HYPERDRIVE", "id": "aff1272026b240e2ae5eade2abd620d4" }
+	],
+	// One back-end in a known cloud region: run the Worker next to PlanetScale
+	// rather than next to the user, since a page render makes several queries.
+	// ca-central-1 per ADR-0005's deliberate Canada-first placement.
+	"placement": { "region": "aws:ca-central-1" },
 	"observability": {
 		"enabled": true
 	}

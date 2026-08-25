@@ -1,12 +1,19 @@
 /**
- * Server-only DB connection settings. Tier-blind by contract (AGENTS.md
- * "Database naming contract"): only libpq's standard variables are read —
- * locally they default to the infra/local stack, deployed they arrive via
- * ConfigMap + Bitwarden-synced Secret and the defaults never fire.
+ * Server-only DB connection settings for **tooling** — drizzle-kit migrations and
+ * one-off admin runs. The deployed app does NOT use this file: it reads
+ * `env.HYPERDRIVE.connectionString` (see ./index.ts, ADR-0005 §7).
  *
- * PGPASSWORD single source (local): infra/local/.env.local. We read it as a
- * FALLBACK when the var isn't already set, so `docker compose --env-file`,
- * drizzle-kit and the app all agree without a second copy in apps/www/.env.
+ * Two shapes, deliberately:
+ *  - `databaseUrl()` is the canonical libpq form, exactly as stored in Bitwarden
+ *    (`?sslmode=verify-full&sslrootcert=system`). Correct for `psql` by default.
+ *  - `pgDriverConfig()` adapts that for postgres-js, which parses URLs itself and
+ *    forwards unknown query params as Postgres *runtime* parameters — so a libpq
+ *    `sslrootcert=system` becomes `SET sslrootcert` and fails with
+ *    `42704 unrecognized configuration parameter`. Strip them, pass `ssl` instead.
+ *
+ * PGPASSWORD single source (local): infra/local/.env.local. Read as a FALLBACK
+ * when the var isn't already set, so `docker compose --env-file`, drizzle-kit and
+ * `psql` all agree without a second copy in apps/www/.env.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -25,6 +32,13 @@ function localEnvPassword(): string | undefined {
 }
 
 export function databaseUrl(): string {
+	// CI and one-off admin runs (ADR-0005): a single full URL, fetched from
+	// Bitwarden at run time. Takes precedence over the libpq parts below, which
+	// only ever describe the local stack. The app itself uses neither — it reads
+	// env.HYPERDRIVE.connectionString (see ./index.ts).
+	const explicit = process.env.DATABASE_URL;
+	if (explicit) return explicit;
+
 	const host = process.env.PGHOST ?? "127.0.0.1";
 	const port = process.env.PGPORT ?? "5434";
 	const db = process.env.PGDATABASE ?? "www";
@@ -37,4 +51,38 @@ export function databaseUrl(): string {
 		);
 	}
 	return `postgres://${user}:${encodeURIComponent(password)}@${host}:${port}/${db}`;
+}
+
+/** libpq-only params that postgres-js would mis-forward as runtime parameters. */
+const LIBPQ_ONLY: Record<string, true> = {
+	sslmode: true,
+	sslrootcert: true,
+	sslcert: true,
+	sslkey: true,
+	sslcrl: true,
+	sslnegotiation: true,
+	channel_binding: true,
+};
+
+/**
+ * postgres-js connection config. Keeps any genuine runtime params in the URL,
+ * lifts libpq's SSL vocabulary into the driver's own `ssl` option.
+ */
+export function pgDriverConfig(): {
+	url: string;
+	ssl: "verify-full" | "require" | "prefer" | false;
+} {
+	const u = new URL(databaseUrl());
+	const sslmode = u.searchParams.get("sslmode");
+	for (const k of Object.keys(LIBPQ_ONLY)) u.searchParams.delete(k);
+
+	// Local stack is plaintext over loopback; anything else must be encrypted.
+	const loopback = u.hostname === "127.0.0.1" || u.hostname === "localhost";
+	const ssl = loopback
+		? false
+		: sslmode === "require" || sslmode === "prefer"
+			? sslmode
+			: "verify-full";
+
+	return { url: u.toString(), ssl };
 }
