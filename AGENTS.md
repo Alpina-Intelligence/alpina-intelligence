@@ -164,6 +164,17 @@ always-on daemons, reachable only via `:22`.
   - Restart-gated extensions (`pg_stat_statements`, `pg_duckdb`, `timescaledb`, `pg_cron`)
     live under *Clusters → Branch → Extensions → Queue → Apply* and can **only** be enabled
     there. `pgvector` needs no restart.
+  - **Query observability is Insights, NOT `pg_stat_statements`** — deliberate, see
+    `infra/planetscale/README.md`. Insights is always on and gives percentiles, 7 days of
+    history, full-table-scan flags and per-index usage; `pg_stat_statements` gives none of
+    those and costs a restart plus resident memory on the 512 MiB instance.
+  - `.mcp.json` registers the **insights-only** MCP server
+    (`…/mcp/planetscale-insights-only`). **Never** the full `…/mcp/planetscale`: it ships
+    `planetscale_execute_write_query`, running on ephemeral credentials minted on demand —
+    not as `<db>_svc` — so it would bypass both the role split and `pg_strict`. Real SQL
+    goes through `psql` with `PLANETSCALE_ADMIN_URL`.
+  - Keep `pginsights.raw_queries` **false**: it collects literals, which PlanetScale warns
+    may send sensitive data off-platform. A privacy decision, not a performance one.
   - `CONNECT` on the `postgres` maintenance DB is **deliberately left open** — `datacl` is
     NULL, so every `pscale_*` role rides the implicit PUBLIC grant and a pooler fronts 5432.
 

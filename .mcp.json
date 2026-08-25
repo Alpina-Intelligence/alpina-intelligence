@@ -7,6 +7,9 @@
     },
     "cloudflare-docs": {
       "url": "https://docs.mcp.cloudflare.com/mcp"
+    },
+    "planetscale-insights": {
+      "url": "https://mcp.pscale.dev/mcp/planetscale-insights-only"
     }
   }
 }

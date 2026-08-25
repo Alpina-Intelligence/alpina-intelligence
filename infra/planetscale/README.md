@@ -194,20 +194,54 @@ DELETE FROM staging_import; COMMIT;
 onto the smallest, least elastic, most expensive-per-vCPU box in the stack and blur the
 boundary ADR-0006 exists to draw.
 
-`pg_stat_statements` is **not yet enabled** (`shared_preload_libraries` is empty). Before
-queuing it, check the role page's **View queries** (PlanetScale Insights) — it may already
-cover the "which query is eating my instance" need without spending a restart. If you do
-enable it, the view only exists where the extension was created, so create it once in
-`postgres` and attribute by database:
+### `pg_stat_statements` is deliberately NOT enabled
 
-```sql
-SELECT d.datname, s.calls, round(s.total_exec_time::numeric, 1) AS total_ms, left(s.query, 80)
-FROM pg_stat_statements s JOIN pg_database d ON d.oid = s.dbid
-ORDER BY s.total_exec_time DESC LIMIT 20;
+Insights (`pginsights`) is always on, already collecting, and strictly better on every axis
+we care about: p50/p95/p99/p99.9 latency, 7 days of history, ~30 per-pattern metrics,
+full-table-scan flags, per-index usage, and *individual* outlier executions (>1 s, >10k rows,
+or erroring) attributed to the role that ran them. `pg_stat_statements` has **no percentiles
+and no time series** — cumulative counters since reset, nothing more.
+
+The argument that nearly justified it was per-logical-database attribution in a
+one-cluster-many-databases design (`pg_stat_statements.dbid` joined to `pg_database`).
+That argument is void: Insights already has **Schema**, **Table schema** and
+**Qualified table** columns, all `database.schema`-qualified.
+
+What is left is genuinely unique — raw SQL access, `pg_stat_statements_reset()` for A/B
+measurement, and planning-time stats — and none of it is worth the price here: a restart is a
+visible outage on a single-node cluster, and `shared_preload_libraries` plus 5000 entries is
+resident memory on the 512 MiB instance ADR-0005 names as the binding constraint. Spending
+the scarcest resource to get *less* than the free tool is a bad trade.
+
+Revisit only for SQL-native alerting that the MCP server below cannot cover.
+
+### Insights settings that stay off
+
+- **`pginsights.raw_queries` → `false`.** Enabling it collects query text *with literals*;
+  PlanetScale's own note warns this "may result in sensitive data … being sent to
+  PlanetScale." Normalized patterns carry no user data, raw literals could. This is a
+  privacy decision consistent with ADR-0005's residency posture, not a performance one.
+- **`pginsights.normalize_schema_names` → `false`.** It exists for schema-per-tenant designs.
+  We are database-per-app, so normalizing would collapse the distinction we want visible.
+- **`track_io_timing` → off.** Required for the `% of I/O` and `I/O time` columns, but the
+  docs warn it "may impact query performance." Not worth it on 1/16 vCPU until there is an
+  actual I/O question.
+
+### MCP access to Insights
+
+`.mcp.json` registers the **insights-only** server:
+
+```
+https://mcp.pscale.dev/mcp/planetscale-insights-only
 ```
 
-Watch `pg_stat_statements_info.dealloc` — a climbing value means `max` (5000) is too low.
-Changing it requires a restart, which on a single-node cluster is a visible outage.
+Not the full `…/mcp/planetscale`. The full server ships
+`planetscale_execute_read_query` **and `planetscale_execute_write_query`**, whose queries run
+on *"short-lived, ephemeral credentials created on demand"* — i.e. **not** as `<db>_svc`, so
+they would bypass the entire least-privilege split *and* `pg_strict`. PlanetScale itself
+advises "caution when giving LLMs write access to any production database." The insights-only
+server excludes both tools; real SQL goes through `psql` with the admin URL, under a command
+a human can read. Auth is OAuth, so the first call prompts an interactive authorize.
 
 ## Watch-outs
 
