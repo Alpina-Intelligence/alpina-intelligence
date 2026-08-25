@@ -9,7 +9,8 @@
       "url": "https://docs.mcp.cloudflare.com/mcp"
     },
     "planetscale-insights": {
-      "url": "https://mcp.pscale.dev/mcp/planetscale-insights-only"
+      "url": "https://mcp.pscale.dev/mcp/planetscale-insights-only",
+      "oauth": { "callbackPort": 3334 }
     }
   }
 }

@@ -243,6 +243,27 @@ advises "caution when giving LLMs write access to any production database." The 
 server excludes both tools; real SQL goes through `psql` with the admin URL, under a command
 a human can read. Auth is OAuth, so the first call prompts an interactive authorize.
 
+**Authorizing it.** OAuth, so it cannot be provisioned from a script and an agent cannot
+complete it — calling a tool with no credential returns an MCP auth error, not a browser.
+Run `/mcp reauth planetscale-insights` in the TUI: omp registers as an OAuth client, starts
+a loopback callback listener, and you grant scopes (choose **read-only** at the org level —
+the insights-only server needs nothing more).
+
+The credential is stored under `mcp_oauth:profile:<profile>:<url>` in the active profile's
+auth storage — **never in `.mcp.json`**. Our entry is definition-only, and `/mcp reauth`
+leaves the file untouched, so a committed config never picks up local auth state and each
+profile signs in as its own account. No secret enters the repo.
+
+Two consequences worth knowing:
+
+- **The callback port is pinned to `3334`** (`oauth.callbackPort`) because omp's listener
+  defaults to **3000**, which is exactly what `apps/www`'s `vite dev --port 3000` occupies.
+  Left at the default, authorizing while the dev server runs would fail to bind.
+- **Subagents cannot authorize.** Headless mode has no `/mcp` UX, so a scout that hits this
+  server before the parent profile is authorized just gets a per-server error. Authorize once
+  interactively; the binding is per *profile*, not per project, so any checkout defining the
+  same URL reuses it.
+
 ## Watch-outs
 
 - **10 GB egress** is included on PS-5; every tier above includes 100 GB. A couple of
