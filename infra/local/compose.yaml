@@ -7,8 +7,13 @@
 # project-scoped too (`name:` below prefixes it), so `docker compose down -v`
 # here can never wipe a neighbour's data.
 #
-# Version parity: postgres:17 matches infra/postgres/compose.yaml (the shared
-# prod server) — dev/prod major-version drift is how migration surprises ship.
+# Version parity: postgres:18 tracks the DEPLOYED tier — PlanetScale Postgres
+# 18.x (ADR-0005) — NOT infra/postgres/ (the legacy box, demoted out of the prod
+# path by ADR-0004). Dev/deployed major-version drift is how migration surprises
+# ship. Exact parity is unattainable and not the goal: PlanetScale is aarch64 and
+# carries extensions no stock image has (pg_strict, timescaledb, vector,
+# pg_duckdb, hypopg, pg_partman). Notably pg_strict's unqualified-UPDATE/DELETE
+# guard is deployed-only — locally an unqualified delete succeeds.
 #
 # Passwords come from infra/local/.env.local (fake, local-only, gitignored).
 # Create it from .env.local.example.
@@ -18,7 +23,7 @@ name: alpina-local
 
 services:
   postgres:
-    image: postgres:17
+    image: postgres:18
     # unless-stopped: a bounced container mid-task is worse than a stale one,
     # and a deliberate `docker compose down` (or `docker stop`) still sticks.
     restart: unless-stopped
@@ -36,7 +41,12 @@ services:
       # is not what it means here.
       APP_DB_PASSWORD: ${PGPASSWORD:?set in infra/local/.env.local}
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # Mount at /var/lib/postgresql, NOT /var/lib/postgresql/data. The 18+
+      # images store data in major-version-specific subdirectories
+      # (/var/lib/postgresql/18/docker) so pg_upgrade --link can work without
+      # crossing a mount boundary; a mount at the old .../data path makes the
+      # entrypoint refuse to start. docker-library/postgres#1259.
+      - pgdata:/var/lib/postgresql
       - ./initdb:/docker-entrypoint-initdb.d:ro # runs ONCE, on first init only
     ports:
       - '5434:5432'
