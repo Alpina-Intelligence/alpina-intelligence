@@ -6,9 +6,11 @@
       "args": ["shadcn@latest", "mcp"]
     },
     "cloudflare-docs": {
+      "type": "http",
       "url": "https://docs.mcp.cloudflare.com/mcp"
     },
     "planetscale-insights": {
+      "type": "http",
       "url": "https://mcp.pscale.dev/mcp/planetscale-insights-only",
       "oauth": { "callbackPort": 3334 }
     }

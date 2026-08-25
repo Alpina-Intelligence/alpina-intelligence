@@ -241,7 +241,7 @@ on *"short-lived, ephemeral credentials created on demand"* — i.e. **not** as 
 they would bypass the entire least-privilege split *and* `pg_strict`. PlanetScale itself
 advises "caution when giving LLMs write access to any production database." The insights-only
 server excludes both tools; real SQL goes through `psql` with the admin URL, under a command
-a human can read. Auth is OAuth, so the first call prompts an interactive authorize.
+a human can read.
 
 **Authorizing it.** OAuth, so it cannot be provisioned from a script and an agent cannot
 complete it — calling a tool with no credential returns an MCP auth error, not a browser.
@@ -254,11 +254,16 @@ auth storage — **never in `.mcp.json`**. Our entry is definition-only, and `/m
 leaves the file untouched, so a committed config never picks up local auth state and each
 profile signs in as its own account. No secret enters the repo.
 
-Two consequences worth knowing:
+Three consequences worth knowing:
 
+- **The entry needs `"type": "http"` explicitly.** Omit it and `type` defaults to `stdio`;
+  the server still connects, but `/mcp reauth` refuses — *"stdio servers manage their own
+  credentials, so OMP has no OAuth to reauthorize."*
 - **The callback port is pinned to `3334`** (`oauth.callbackPort`) because omp's listener
   defaults to **3000**, which is exactly what `apps/www`'s `vite dev --port 3000` occupies.
-  Left at the default, authorizing while the dev server runs would fail to bind.
+  Left at the default, authorizing while the dev server runs would fail to bind. Note the
+  bundled `mcp-schema.json` wrongly rejects `oauth` (and `timeout`/`enabled`/`auth`) on http
+  servers — an `allOf` + `additionalProperties: false` bug, not a real constraint. Keep it.
 - **Subagents cannot authorize.** Headless mode has no `/mcp` UX, so a scout that hits this
   server before the parent profile is authorized just gets a per-server error. Authorize once
   interactively; the binding is per *profile*, not per project, so any checkout defining the

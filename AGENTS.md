@@ -254,6 +254,16 @@ One line each; the reasoning lives in the ADR or the file's own comment.
   known cloud region use `"placement": { "region": "aws:ca-central-1" }`, not `mode: smart`.
 - **`bun run <script>` is per-workspace-member.** `build`/`check`/`db:*` live in
   `apps/www/package.json`; running them from the repo root fails with "Script not found".
+- **Remote MCP servers in `.mcp.json` need an explicit `"type": "http"`.** With `type`
+  omitted it defaults to **stdio**, and although the server still *connects* via transport
+  inference, `/mcp reauth` refuses with *"stdio servers manage their own credentials, so OMP
+  has no OAuth to reauthorize."* Both remote entries were missing it.
+- **The bundled `mcp-schema.json` is wrong about shared fields on http servers.** The
+  `httpServer` branch sets `additionalProperties: false` and cannot see `serverBase` through
+  `allOf`, so `oauth`, `auth`, `timeout` and `enabled` all fail validation despite being
+  documented shared fields. omp does not enforce it at runtime. Do **not** delete
+  `planetscale-insights.oauth.callbackPort` to silence an editor — it is deliberate (see
+  `infra/planetscale/README.md`).
 
 ## Git
 
