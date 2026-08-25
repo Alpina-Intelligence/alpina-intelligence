@@ -57,9 +57,13 @@ is no `--rotate`, because supplying a password *is* the rotation.
 printf '%s' "$PW" | ssh alpina 'cd /opt/platform/postgres && ./provision-db.sh blog --conn-limit 10'
 ```
 
-Nothing is written to disk on the host. The cluster gets the same value independently, via
-`sm-operator` syncing it from Bitwarden — so **update Bitwarden and run this in one sitting**,
-or the role and the app will disagree.
+Nothing is written to disk on the host.
+
+> **Scope, per ADR-0004 (2026-08-13):** this script is **local and legacy-box only**.
+> Deployed databases are PlanetScale, and their credential reaches the Worker through a
+> Hyperdrive config, not through this box. The `sm-operator`/`kubectl rollout restart`
+> half of the old flow is dead — k3s is shelved (ADR-0003) and no cluster reads this
+> server.
 
 Then commit the invocation to this repo's history (a line in this README or a
 follow-up script) so the fleet's databases are documented, not folklore.
@@ -68,14 +72,10 @@ follow-up script) so the fleet's databases are documented, not folklore.
 
 1. New value in Bitwarden.
 2. `printf '%s' "$PW" | ssh alpina '… ./provision-db.sh <project>'` — updates the role.
-3. Wait out the operator's 300s refresh, confirm the k8s Secret changed.
-4. `kubectl -n <project> rollout restart deployment/<app>` — env vars freeze at process
-   start, so until this runs the pods are still using the old password and will start
-   failing auth the moment they reconnect.
 
-Steps 2 and 4 bracket a window where the role has the new password and the pods have the
-old one. On a single-replica app that's a brief outage; it is not avoidable without
-Postgres supporting two live passwords per role, which it doesn't.
+That is the whole procedure now. Nothing downstream caches the value: the only consumers
+left are a local stack that is recreated from scratch anyway, and — until `www` finishes
+moving — a legacy database with no deployed reader.
 
 ### What it guarantees
 
@@ -99,16 +99,14 @@ when one person owns every project; it is **not** a boundary you'd put between t
 | --- | --- | --- |
 | puck-prophet | `puck` | `puck_svc` |
 
-## ⚠️ Before the first app deploys to k3s
+## Deployed consumers: none, by design
 
-The container binds `127.0.0.1:5432` — safe, but **unreachable from k3s pods** (they're
-on the flannel CNI, not loopback). Rebind `ports:` to the node-internal IP pods can
-reach, then point the k8s `Endpoints` at it. One deliberate step at deploy time.
+The container stays bound to `127.0.0.1:5432`. The old "rebind to a node-internal IP so
+k3s pods can reach it" step is **dropped** — k3s is shelved (ADR-0003) and deployed
+Postgres is PlanetScale over Hyperdrive (ADR-0004), so nothing off this box connects.
 
-## Backups (TODO, before real traffic)
+## Backups
 
-The volume `platform_pgdata` is the one piece of state that can't be rebuilt from git.
-Add a per-database `pg_dump` cron → R2 (already in the Cloudflare account,
-S3-compatible), plus `pg_dumpall --globals-only` for the roles. Per-database rather
-than `pg_dumpall` so a single project can be restored without touching the others.
-Not wired yet.
+**Closed by ADR-0004.** PlanetScale owns backups for deployed data; the local stack
+(`infra/local/`) is throwaway by design. The `pg_dump` → R2 cron this section used to
+specify was never built and is no longer needed.

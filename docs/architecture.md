@@ -1,14 +1,23 @@
 # Platform architecture
 
-The shared substrate: one Hetzner VPS running the shared Postgres, plus Cloudflare's
-edge, where HTTP apps now deploy as Workers (ADR-0003). Every project depends on
-what's described here; nothing here depends on any particular project.
+The shared substrate: Cloudflare's edge, where HTTP apps deploy as Workers (ADR-0003)
+against managed Postgres (ADR-0004), plus a legacy Hetzner VPS retained for always-on
+daemons. Every project depends on what's described here; nothing here depends on any
+particular project.
 
 > Status: **living doc, partially superseded.** §2–3 (tunnel/Traefik/k3s ingress) and
 > the k3s/Flux deploy mechanism describe the pre-Workers design — **superseded by
 > ADR-0003** (2026-08-11): HTTP apps deploy to Cloudflare Workers from `apps/<name>/`,
-> `cloudflared` is stopped, k3s is shelved. Database placement (§4–6) and the secrets
-> model (§7) remain current.
+> `cloudflared` is stopped, k3s is shelved. §4–6 (Postgres on the box) is **superseded
+> by ADR-0004** (2026-08-13) for deployed databases, and now describes the local stack
+> and the legacy box only. §7's secrets *policy* holds — Bitwarden is the source of
+> truth, nothing secret in git — but its *mechanism* (sm-operator, `BitwardenSecret`
+> CRs, `kubectl rollout restart`) went with k3s; see AGENTS.md for the live path.
+> **ADR-0005** (2026-08-23) amends this further: the deployed database is one
+> Cloudflare-billed PlanetScale cluster holding many logical databases in `ca-central-1`, and
+> §7's implied direction of travel toward Cloudflare's own secret stores is closed off — they
+> are write-only and Workers-only, so Bitwarden remains the vault of record now that compute
+> spans two vendors.
 
 ## 1. One repo, one boundary
 
@@ -416,10 +425,15 @@ per sign-in.
 
 ### If it ever moves, the database is the decision
 
+**Resolved 2026-08-13 by ADR-0004: row 2.** Hetzner's 15 June repricing (CPX41 Ashburn
+$46.49 → $141.49/mo for new orders and rescales) made row 3 a dead end — the box can no
+longer be resized at its grandfathered price, and the USA region carries no
+cost-optimized line. The evaluation below stands as history.
+
 | Option | Code change | Cost | Still run a box? |
 | --- | --- | --- | --- |
 | D1 | SQLite: rewrite schema to `sqlite-core`, **lose `timestamptz`** | Free tier is real | No |
-| PlanetScale Postgres (via Hyperdrive, billed by Cloudflare) | None | Paid, billed daily whether queried or not | No |
+| PlanetScale Postgres (via Hyperdrive) | None | From $5/mo single-node | No |
 | Keep this Postgres, reached by Hyperdrive + Workers VPC over **this tunnel** | None | None | Yes |
 
 D1's read replication suits the workload conceptually — read-heavy, batch writes, and
@@ -461,8 +475,9 @@ route-group split survive intact.
    mechanism~~ → Flux ✅ · ~~tunnel config management~~ → remote, Terraform-owned ✅ ·
    ~~where routing lives~~ → per-app `Ingress`, named tunnel hostnames only for Access ✅ ·
    ~~registry~~ → GHCR ✅ · ~~host patching~~ → scheduled auto-reboot ✅
-2. **Rebind Postgres** from `127.0.0.1` to a pod-reachable node IP; add the Service +
-   Endpoints. Blocking the first app deploy.
+2. ~~**Rebind Postgres** to a pod-reachable node IP + Service/Endpoints~~ → **dropped.**
+   k3s is shelved (ADR-0003) and deployed Postgres is managed (ADR-0004), so nothing in a
+   cluster ever reaches this box. It stays loopback-bound.
 3. ~~**Where CI's infra credentials live**~~ → **Bitwarden Secrets Manager**, resolved
    2026-08-02 (§7). CI pulls `CLOUDFLARE_API_TOKEN` and the R2 state keys with
    `bitwarden/sm-action` under the `github-ci-puckprophet` machine account, so nothing is
@@ -470,8 +485,10 @@ route-group split survive intact.
    confirm the Teams-tier spend that the machine-account count and the audit log both
    depend on. Cloudflare's Secrets Store was never a candidate — like their registry, it
    feeds Cloudflare's runtime, not a k3s cluster on our own box.
-4. **Backups** — per-database `pg_dump` → R2, plus `pg_dumpall --globals-only` for roles.
-   Encrypt them: they leave the box. Do before real traffic.
+4. ~~**Backups** — per-database `pg_dump` → R2 + `pg_dumpall --globals-only`~~ →
+   **closed for production** by ADR-0004: PlanetScale owns deployed backups. The local
+   stack is throwaway by design and the legacy box holds no production data once `www`
+   moves, so there is nothing left to build.
 5. **Terraform bootstrap** — provider pin, R2 backend, import the wildcard record,
    `cloudflare_zero_trust_tunnel_cloudflared_config` (currently version 6, a lone
    `http_status:404`) **and the zone's cache configuration**, then flip the catch-all to

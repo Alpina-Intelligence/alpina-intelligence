@@ -6,11 +6,12 @@ Read the relevant ADR before changing related design.
 
 ## What this is
 
-All Alpina projects in one repo (ADR-0001): shared substrate (`infra/` — Postgres,
-sm-operator; cloudflared/k3s deprecated per ADR-0003), deployable apps (`apps/*`,
-grouped by deployable unit, not language — ADR-0002), shared libs (`packages-ts/`,
-`packages-py/`). HTTP apps deploy to Cloudflare Workers (ADR-0003); the Hetzner VPS
-keeps the shared Postgres, reachable only via `:22`.
+All Alpina projects in one repo (ADR-0001): shared substrate (`infra/` — local Postgres,
+PlanetScale runbook, Terraform; cloudflared/k3s/sm-operator deprecated per ADR-0003 and
+ADR-0004), deployable apps (`apps/*`, grouped by deployable unit, not language — ADR-0002),
+shared libs (`packages-ts/`, `packages-py/`). HTTP apps deploy to Cloudflare Workers
+(ADR-0003) against managed Postgres (ADR-0004, ADR-0005); the Hetzner VPS is retained for
+always-on daemons, reachable only via `:22`.
 
 ## Workspace rules (ADR-0002)
 
@@ -32,15 +33,26 @@ keeps the shared Postgres, reachable only via `:22`.
 ## Frontend (TanStack Start / Query / Router + shadcn/ui)
 
 - **Before editing TanStack Start/Router/Query code, load the matching skill** from the
-  installed packages: `bunx @tanstack/intent list` (discovers skills shipped inside
-  `@tanstack/*` deps — they match the installed versions), then
-  `bunx @tanstack/intent load <id>`. Don't work from pre-trained TanStack knowledge;
-  the APIs move fast.
+  installed packages, which match the installed versions. **Invoke the CLI by path, not via
+  `bunx`:** `bunx @tanstack/intent …` resolves `@tanstack/devtools-vite`'s bin shim, which
+  imports `./intent-library` — a subpath `@tanstack/intent@0.3.6` no longer exports, so it
+  dies with `ERR_PACKAGE_PATH_NOT_EXPORTED`. Working form, from `apps/www`:
+  - `bun node_modules/@tanstack/intent/dist/cli.mjs list`
+  - `bun node_modules/@tanstack/intent/dist/cli.mjs load <id>`
+
+  Don't work from pre-trained TanStack knowledge; the APIs move fast. And check the skill's
+  `library_version` against what's installed — the shipped skills document a newer API than
+  this repo's `@tanstack/react-start`, so their examples can fail to typecheck.
   - The routing table for these skills is the `intent-skills` block in
     `apps/www/AGENTS.md` — a **static snapshot**, regenerated only by
-    `bunx @tanstack/intent install --map` (run in `apps/www`). Re-run it after any
+    `… /dist/cli.mjs install --map` (run in `apps/www`). Re-run it after any
     dependency bump so the map can't lag the lockfile. Belongs in the post-install
     path once a justfile exists.
+  - **The TanStack family is currently version-drifted** (`react-start` 1.168.40,
+    `router-plugin` 1.168.27, `start-server-core` 1.169.23, `start-client-core` 1.170.19,
+    `react-router` 1.170.23, `router-core` 1.171.19) against this file's own
+    "bump the whole family together" rule. Consequence: no server-route API
+    (`server` on `createFileRoute`) — fix by bumping the family as one change.
 - **Drizzle ORM: retrieve from official docs, never pre-trained knowledge or
   third-party skills** (none are vendor-maintained; we checked). Index:
   `https://orm.drizzle.team/llms.txt`; pinpoint lookups:
@@ -85,27 +97,50 @@ keeps the shared Postgres, reachable only via `:22`.
 
 ## Substrate boundaries (ADR-0001, architecture.md)
 
-- **The Postgres superuser password never enters CI, an app env, or this repo.**
-  Provisioning (`infra/postgres/provision-db.sh`) is hand-run; per-app credentials come
-  from Bitwarden via sm-operator.
+- **The Postgres superuser password never enters CI, an app env, or this repo.** Still
+  true, now narrower: `infra/postgres/provision-db.sh` is hand-run and **local/legacy-box
+  only** (ADR-0004). No deployed role is ever provisioned by hand.
 - HTTP apps deploy to Workers (ADR-0003): each owns `apps/<name>/wrangler.jsonc`
   (worker name = app dir name), deploys via `bun run deploy` (= `vite build &&
   wrangler deploy`); custom domains are `routes` in that file. The k3s/`deploy/`
   manifest path and Docker-image builds are shelved with ADR-0003.
-- **Database naming contract:** app dir name = database name = role prefix
-  (`apps/www` → DB `www`, role `www_svc`) — derived by code at both tiers, never
-  chosen freely. Apps read only libpq vars (`PGHOST/PGPORT/PGDATABASE/PGUSER/
-  PGPASSWORD`) and stay tier-blind: locally they point at `127.0.0.1:5434`
-  (`infra/local/`, fake creds from `.env.local`); deployed they get ConfigMap +
-  Bitwarden-synced Secret.
-- **New app needs a DB? Two touches, one per tier:**
+- **Database naming contract (amended by ADR-0005):** app dir name = database name at both
+  tiers (`apps/www` → DB `www`). The *role* half is **local-only** — PlanetScale role names
+  are cosmetic labels over a generated `<role-id>`. Locally, apps read libpq vars
+  (`PGHOST/PGPORT/PGDATABASE/PGUSER/PGPASSWORD`) pointing at `127.0.0.1:5434`
+  (`infra/local/`, fake creds from `.env.local`); deployed, they read the connection string
+  from the Hyperdrive binding (`env.HYPERDRIVE.connectionString`) and see no libpq var at all.
+- **Deployed Postgres is ONE PlanetScale cluster holding many logical databases (ADR-0005)** —
+  `alpina-intelligence`, `ca-central-1`, branch `main`, port **5432**, bought through the
+  Cloudflare dashboard so it bills on the Cloudflare invoice. Never spin up a second cluster
+  for a new app. Build the client **per request** — a module-scope `postgres()` singleton is a
+  workerd footgun — with `max: 5`, `fetch_types: false`, `prepare: true`. Migrations run from
+  CI as `<db>_migrator`, never a laptop; the Worker's `<db>_svc` role has no DDL rights.
+  Hyperdrive configs are created **`--caching-disabled`**.
+- **App DB code has NO tier branching (ADR-0005 §7):** read
+  `env.HYPERDRIVE.connectionString` everywhere. `apps/www` runs SSR under workerd in dev
+  (`cloudflare({ viteEnvironment: { name: "ssr" } })`), so the binding resolves under
+  `bun run dev` too — point it at local Postgres with
+  `CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE` from `.envrc`. **Never** put
+  `localConnectionString` in `wrangler.jsonc` — that file is committed. Local mode connects
+  direct: no pooling (accepted), no caching (already matches prod). The libpq vars are for
+  `drizzle-kit`/`psql` only, not app code. Driver note: Cloudflare recommends `pg`, we run
+  postgres-js — deliberate, since its only cited advantage is caching compatibility and we
+  disable caching.
+- **New app needs a DB? One touch per tier:**
   1. local: add the name to `APPS=(…)` in `infra/local/initdb/01-roles-and-dbs.sh`,
      then `docker compose down -v && up -d` (initdb only runs on first volume init;
      local data is throwaway by design)
-  2. VPS: mint the password (see Secrets below), then
-     `bwsl secret get <uuid> | jq -r .value | ssh alpina 'cd /opt/platform/postgres && ./provision-db.sh <name>'`
-  There is deliberately no automation bridging these — the VPS step needs superuser
-  and stays hand-run.
+  2. deployed: follow [`infra/planetscale/README.md`](infra/planetscale/README.md) — roles on
+     the platform, then `CREATE DATABASE` + `REVOKE CONNECT … FROM PUBLIC` + grants in SQL,
+     then `wrangler hyperdrive create … --caching-disabled` and add the binding to
+     `apps/<name>/wrangler.jsonc`
+- **Canadian residency is partial (ADR-0005):** Postgres is in Canada; the R2 lake **cannot
+  be** — jurisdictions are `eu`/`fedramp`/`us`, there is no `ca`. Never claim "all your data
+  stays in Canada."
+- **NEVER rescale, resize, or rebuild the Hetzner box** (ADR-0004). It holds a
+  grandfathered CPX41 price ($46.49/mo; $141.49 to re-order after 2026-06-15) and any of
+  those actions forfeits it permanently — Ashburn carries no cost-optimized line.
 
 ## Secrets
 
@@ -123,14 +158,26 @@ keeps the shared Postgres, reachable only via `:22`.
   Zero Trust org is `alpina-intelligence.cloudflareaccess.com` (One-time PIN IdP);
   the site sits behind app `www (pre-launch gate)` until launch — un-gating is
   deleting that app, no code change.
-- **Provisioning a deployed app's DB credential** (the 2026-08-02 flow — Bitwarden
-  authoritative, nothing durable on any host):
-  1. mint + store: `bwsl secret create PGPASSWORD "$(openssl rand -hex 32)" <project-id>`
-     (alphanumeric only — `provision-db.sh` rejects symbols by design)
-  2. map the returned UUID in `apps/<name>/deploy/bitwardensecret.yaml`
-  3. apply to the role: `bwsl secret get <uuid> | jq -r .value | ssh alpina 'cd /opt/platform/postgres && ./provision-db.sh <name>'`
-  4. rotation = the same three steps with a new value (`bws secret edit` keeps the
-     UUID stable, so step 2 becomes a no-op), then `kubectl rollout restart`.
+- **Cloudflare's secret stores are write-only and Workers-only** (ADR-0005): a Secrets Store
+  secret *"can no longer be decrypted or accessed via API or on the dashboard"*, and only
+  Workers/AI Gateway can read one. Modal, CI and your terminal cannot — so **Bitwarden stays
+  the vault of record** and Secrets Store is not adopted. `apps/www` correctly has zero
+  Worker secrets: its DB credential arrives only via the Hyperdrive binding.
+- **Provisioning a deployed app's DB credential** (ADR-0005 — one secret per role × database,
+  holding the **whole connection URL**, never split into host/port/user/password parts):
+  1. mint + store: `bwsl secret create WWW_SVC_DATABASE_URL "postgres://…" <project-id>`,
+     password from `openssl rand -hex 32` (alphanumeric only, so it pastes into a URL
+     unescaped; `provision-db.sh` rejects symbols by design for the local tier)
+  2. bake it into Hyperdrive: `bunx wrangler hyperdrive create <name>
+     --connection-string="postgres://…" --caching-disabled`
+  3. rotation is three steps — `pscale role reset` → `bws secret edit` (UUID stays stable) →
+     `bunx wrangler hyperdrive update <id> --connection-string=…`. **Hyperdrive holds its own
+     copy**, so skipping step 3 breaks the Worker; there is no 300s re-read the way
+     sm-operator had.
+  CI needs no copy of its own: give it only `BWS_ACCESS_TOKEN` and have it fetch the
+  `<db>_migrator` URL at run time. The sm-operator / `apps/<name>/deploy/bitwardensecret.yaml`
+  / `kubectl rollout restart` path is shelved with ADR-0003 and dead for deployed DBs under
+  ADR-0004.
 
 ## GitHub account
 

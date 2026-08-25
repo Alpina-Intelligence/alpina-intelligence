@@ -1,3 +1,10 @@
+> **DEPRECATED 2026-08-11 (ADR-0003), fully dead 2026-08-13 (ADR-0004).** This
+> operator only ever writes **k8s Secrets**, and k3s is shelved — nothing consumes
+> them. Deployed app secrets are Workers secrets (`wrangler secret put`); the
+> deployed DB credential lives in a Hyperdrive config. Bitwarden remains the source
+> of truth for both, reached by `bwsl` (AGENTS.md) rather than by this operator.
+> Everything below describes the deprecated cluster-sync design.
+
 # sm-operator (Bitwarden Secrets Manager → k8s Secrets)
 
 Pulls app secrets from Bitwarden Secrets Manager into the cluster on a timer, so no app

@@ -12,3 +12,5 @@ Statuses: `Proposed` → `Accepted` → (`Superseded by ADR-NNNN`).
 | [0001](0001-monorepo.md) | Consolidate to a monorepo | Accepted |
 | [0002](0002-repo-layout.md) | Repo layout: deployable-unit apps, per-language packages | Accepted |
 | [0003](0003-workers-deploy.md) | HTTP apps deploy to Cloudflare Workers; tunnel ingress deprecated | Accepted |
+| [0004](0004-managed-postgres.md) | Deployed Postgres is managed (PlanetScale via Hyperdrive); the VPS becomes a daemon host | Accepted |
+| [0005](0005-deployed-data-tier.md) | Deployed data tier: Cloudflare-billed PlanetScale, one cluster many databases, Canada-first placement | Accepted |

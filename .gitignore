@@ -39,3 +39,8 @@ storybook-static/
 # Agent tooling session artifacts
 .playwright-mcp/
 .claude/
+.omp/
+
+# wrangler's generated binding types. Tracked deliberately (NOT ignored): it is the
+# only place `env.HYPERDRIVE` is typed, and a fresh clone must typecheck before
+# anyone has run `wrangler types`. Regenerate after editing wrangler.jsonc.
