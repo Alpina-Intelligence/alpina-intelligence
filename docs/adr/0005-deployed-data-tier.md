@@ -79,16 +79,27 @@ least privileged — if `<db>_svc` leaks, rows are exposed but the schema cannot
 unqualified `UPDATE`/`DELETE` at parse time for the runtime role, with the migrator only
 warning, because backfills are legitimately unqualified.
 
-> **As built, 2026-08-25: `pg_strict` is NOT in effect.** An unqualified
-> `DELETE FROM posts` as `www_svc` succeeded. It is configurable **only through the
-> dashboard at role-creation time** for us: PlanetScale documents `ALTER ROLE …` /
-> `ALTER DATABASE … SET pg_strict.*`, but both are refused with our Default role —
-> `ALTER ROLE` needs `ADMIN OPTION` on a control-plane-created role, and
-> `pg_strict.*` is a superuser-only parameter while the Default role is `NOSUPERUSER`.
-> Their documented SQL path assumes a superuser they do not grant.
-> Since role-ids are baked into Bitwarden *and* Hyperdrive's own copy, retro-fitting it
-> means either an editable dashboard field or recreating both roles and re-running the
-> whole credential chain. Treat the table above as the target, not the current state.
+`pg_strict` is **dashboard-only**, and that constrains how it is operated. PlanetScale
+documents `ALTER ROLE …` / `ALTER DATABASE … SET pg_strict.*`, but both are refused with
+our Default role: `ALTER ROLE` needs `ADMIN OPTION` on a control-plane-created role, and
+`pg_strict.*` is a superuser-only parameter while the Default role is `NOSUPERUSER`. Their
+documented SQL path assumes a superuser they do not grant. It **is** editable on an existing
+role — *Settings → Roles → `<role>` → **Query safety** → Edit* — so no role recreation is
+needed, which matters because role-ids are baked into Bitwarden *and* Hyperdrive's own copy.
+
+**It is not auditable from the catalog.** `pg_db_role_setting` stays empty even when the
+guard is active; PlanetScale applies it outside standard Postgres role settings. The only
+checks are `current_setting('pg_strict.require_where_on_delete', true)` on a live connection
+as that role, or the dashboard. Any drift check must connect, not query the catalog.
+
+> **Verified 2026-08-25 on `www`:** as `www_svc`, `DELETE FROM posts` and
+> `UPDATE posts SET …` are both refused (*"blocked by pg_strict"*), while the same
+> statements with a `WHERE` succeed, and the documented escape hatch
+> (`BEGIN; SET LOCAL pg_strict.require_where_on_delete='off'; …; COMMIT`) works.
+> `www_migrator` is currently `off`/`off` rather than the intended `warn`/`warn` — an
+> unqualified delete succeeds there silently. Flip it to `warn` so backfills are logged.
+> Settings apply only to connections opened after the change, so a warm Hyperdrive pool
+> can lag briefly.
 
 `<db>_svc` needs exactly one grant — `CONNECT`. Postgres' predefined roles already confer
 *"USAGE rights on all schemas, even without having it explicitly,"* so no schema grants and

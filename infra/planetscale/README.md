@@ -154,15 +154,51 @@ Mint application passwords alphanumeric — `openssl rand -hex 32` — so they a
 into a URL unescaped. Include `?sslmode=verify-full&sslrootcert=system` for direct clients
 (`psql`, MLflow's psycopg2); Hyperdrive manages origin TLS itself.
 
-## Extensions
+## Extensions and query safety
 
-Enabled on this cluster: `pg_strict`, `pg_stat_statements` (plus PlanetScale's always-on
-`pg_pscale_utils` and `pgextwlist`). Everything else is off deliberately — `pg_duckdb` and
-`timescaledb` in particular would move analytical compute onto the smallest, least elastic,
-most expensive-per-vCPU box in the stack and blur the boundary ADR-0006 exists to draw.
+Two different mechanisms, often confused:
 
-`pg_stat_statements` collects cluster-wide but its *view* only exists where the extension was
-created. Create it once in `postgres` and attribute by database:
+**`pg_strict` is not an Extensions-tab item.** PlanetScale installs it always and it cannot
+be disabled; what you configure is **per role**, at *Settings → Roles → `<role>` →
+**Query safety** → Edit*. It is editable on existing roles, so enabling it never requires
+recreating a role (which would churn the role-id baked into Bitwarden and Hyperdrive).
+
+SQL cannot set it here. `ALTER ROLE … SET pg_strict.*` fails without `ADMIN OPTION` on a
+control-plane role, and `ALTER DATABASE … SET pg_strict.*` fails because it is a
+superuser-only parameter and the Default role is `NOSUPERUSER` — PlanetScale's own docs
+show a SQL path that assumes privileges they don't grant.
+
+**It is invisible to the catalog.** `pg_db_role_setting` is empty even while the guard is
+active. Audit by connecting as the role:
+
+```sql
+SELECT current_setting('pg_strict.require_where_on_update', true) AS upd,
+       current_setting('pg_strict.require_where_on_delete', true) AS del;
+```
+
+Target is `on`/`on` for `<db>_svc` and `warn`/`warn` for `<db>_migrator`. Changes bind only
+to connections opened afterwards. For a deliberate unqualified write:
+
+```sql
+BEGIN; SET LOCAL pg_strict.require_where_on_delete = 'off';
+DELETE FROM staging_import; COMMIT;
+```
+
+**Restart-gated extensions** live on the other page: *Clusters → `Branch` dropdown →
+**Extensions** tab → enable → Queue extension changes → Apply changes*. Anything marked
+"Restart required" (`pg_stat_statements`, `pg_cron`, `pg_duckdb`, `timescaledb`,
+`pg_partman_bgw`, `pg_squeeze`, `pg_hint_plan`) can **only** be enabled there, never with
+`CREATE EXTENSION`. `pgvector` and `pgvectorscale` need no restart.
+
+`pg_duckdb` and `timescaledb` stay off deliberately — they would move analytical compute
+onto the smallest, least elastic, most expensive-per-vCPU box in the stack and blur the
+boundary ADR-0006 exists to draw.
+
+`pg_stat_statements` is **not yet enabled** (`shared_preload_libraries` is empty). Before
+queuing it, check the role page's **View queries** (PlanetScale Insights) — it may already
+cover the "which query is eating my instance" need without spending a restart. If you do
+enable it, the view only exists where the extension was created, so create it once in
+`postgres` and attribute by database:
 
 ```sql
 SELECT d.datname, s.calls, round(s.total_exec_time::numeric, 1) AS total_ms, left(s.query, 80)
