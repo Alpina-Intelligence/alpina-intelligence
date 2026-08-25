@@ -246,9 +246,17 @@ One line each; the reasoning lives in the ADR or the file's own comment.
 
 ## Git
 
-- **Work happens on the `platform` branch**, which is 28 commits ahead of `main` and shares
-  no recent history with it (`main` is the pre-restart line). `platform` has **no upstream**
-  and has never been pushed — first push is `git push -u origin platform`.
+- **Work happens on the `platform` branch**, tracking `origin/platform`. It is 28 commits
+  ahead of `main` and shares no recent history with it: `main` (`e332e00`) is the
+  pre-restart line, deliberately left alone, and no PR is open against it.
+- **`git push` needs credentials supplied explicitly.** `origin` is HTTPS with **no**
+  `credential.helper` configured, so a bare `git push` hangs on an interactive prompt.
+  Per-invocation, nothing persisted to config:
+
+  ```bash
+  GH_TOKEN="$(gh auth token --user eric-austin)" \
+    git -c credential."https://github.com".helper='!gh auth git-credential' push
+  ```
 
 ## GitHub account
 
