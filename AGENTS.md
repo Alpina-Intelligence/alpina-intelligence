@@ -173,10 +173,15 @@ always-on daemons, reachable only via `:22`.
     `planetscale_execute_write_query`, running on ephemeral credentials minted on demand —
     not as `<db>_svc` — so it would bypass both the role split and `pg_strict`. Real SQL
     goes through `psql` with `PLANETSCALE_ADMIN_URL`.
-  - `raw_queries` should be **false** but the API currently reports
-    `insights_raw_queries: true` — literals are being collected for notable queries. Turn it
-    off (*Clusters → Branch → Extensions → pginsights*) before real data lands; PlanetScale
-    warns it may send sensitive data off-platform. A privacy decision, not a performance one.
+  - `raw_queries`: **two controls that disagree.** The extension parameter (*Clusters →
+    Branch → Extensions → pginsights*, default `false`) reads off in the dashboard; the
+    database object reports `insights_raw_queries: true`. No `pginsights.raw_queries` GUC
+    exists, so SQL cannot adjudicate. Unresolved — confirm with support before real user
+    data lands, since raw collection sends literals off-platform.
+  - `pg_stat_statements` is **preloaded by the platform** (Insights is built on it) but not
+    `CREATE EXTENSION`-ed anywhere. So exposing the view costs **no restart and no extra
+    memory** — the earlier "too expensive" reasoning was wrong. It stays uninstalled because
+    Insights already answers the same questions better, not because of cost.
   - `CONNECT` on the `postgres` maintenance DB is **deliberately left open** — `datacl` is
     NULL, so every `pscale_*` role rides the implicit PUBLIC grant and a pooler fronts 5432.
 

@@ -194,37 +194,54 @@ DELETE FROM staging_import; COMMIT;
 onto the smallest, least elastic, most expensive-per-vCPU box in the stack and blur the
 boundary ADR-0006 exists to draw.
 
-### `pg_stat_statements` is deliberately NOT enabled
+### `pg_stat_statements` is not installed — but the cost argument is void
 
-Insights (`pginsights`) is always on, already collecting, and strictly better on every axis
-we care about: p50/p95/p99/p99.9 latency, 7 days of history, ~30 per-pattern metrics,
-full-table-scan flags, per-index usage, and *individual* outlier executions (>1 s, >10k rows,
-or erroring) attributed to the role that ran them. `pg_stat_statements` has **no percentiles
-and no time series** — cumulative counters since reset, nothing more.
+Insights (`pginsights`) is always on and better on every axis we care about: p50/p95/p99/p99.9
+latency, 7 days of history, ~30 per-pattern metrics, full-table-scan flags, per-index usage,
+and *individual* outlier executions (>1 s, >10k rows, or erroring) attributed to the role that
+ran them. `pg_stat_statements` has **no percentiles and no time series** — cumulative counters
+since reset, nothing more. Per-logical-database attribution, once the strongest argument for
+it, is already covered: Insights carries **Schema**, **Table schema** and **Qualified table**,
+all `database.schema`-qualified, and results cleanly separate `postgres.public` from
+`www.public`.
 
-The argument that nearly justified it was per-logical-database attribution in a
-one-cluster-many-databases design (`pg_stat_statements.dbid` joined to `pg_database`).
-That argument is void: Insights already has **Schema**, **Table schema** and
-**Qualified table** columns, all `database.schema`-qualified.
+**Correction (2026-08-25).** The original rejection also argued it would cost a restart and
+resident memory on a 512 MiB instance. That is no longer true, and probably never was:
 
-What is left is genuinely unique — raw SQL access, `pg_stat_statements_reset()` for A/B
-measurement, and planning-time stats — and none of it is worth the price here: a restart is a
-visible outage on a single-node cluster, and `shared_preload_libraries` plus 5000 entries is
-resident memory on the 512 MiB instance ADR-0005 names as the binding constraint. Spending
-the scarcest resource to get *less* than the free tool is a bad trade.
+```
+SHOW shared_preload_libraries;  -- pg_stat_statements,pg_strict
+SELECT installed_version FROM pg_available_extensions WHERE name='pg_stat_statements';  -- (empty)
+```
 
-Revisit only for SQL-native alerting that the MCP server below cannot cover.
+PlanetScale **preloads it** — almost certainly because Insights is built on it — with the
+documented defaults already live (`max=5000`, `track=top`, `save=on`, `track_planning=off`,
+`track_utility=on`). The library and its 5000 entries are resident whether we use them or not,
+and the platform reads shared memory directly rather than through the SQL view. So
+`CREATE EXTENSION pg_stat_statements` in `postgres` would cost **no restart and no extra
+memory** — it only exposes a view over memory already allocated.
 
-### Insights settings that stay off
+The conclusion stands but on narrower grounds: not "too expensive," just **not needed**, since
+Insights answers the same questions with more detail. Enable it for free the moment a
+SQL-native need appears — joins against our own tables, a cron poller, `reset()` for A/B
+measurement, or planning-time stats.
 
-- **`raw_queries` → should be `false`, but is currently `true`.** The API reports
-  `insights_raw_queries: true` on this database (`planetscale_list_databases`), so full query
-  text *including literals* is being collected for notable queries. PlanetScale's own note
-  warns this "may result in sensitive data … being sent to PlanetScale." Aggregate views stay
-  normalized (`… where name like $1`), so this only bites on the notable-query detail path —
-  but it is exactly the wrong default under ADR-0005's residency posture. **Turn it off**:
-  *Clusters → Branch → Extensions → pginsights*. Harmless today because no user data exists;
-  fix before the first real row lands. A privacy decision, not a performance one.
+Related: `pg_strict` needed that preload too, and the platform restarted the node
+automatically (2026-08-25 22:54 UTC) when the per-role Query safety setting was applied. The
+original instinct that a preload was required was right; the wrong part was assuming a human
+had to arrange it.
+
+### Insights settings
+
+- **`raw_queries` — two controls, and they disagree.** The branch-scoped extension parameter
+  (*Clusters → Branch → Extensions → pginsights*, the one the docs name, default `false`)
+  reads **off** in the dashboard. The database object returned by `planetscale_list_databases`
+  reports `insights_raw_queries: **true**`. Which governs is **unresolved**: there is no
+  `pginsights.raw_queries` GUC in the database (`pg_settings` exposes only
+  `pginsights.tag_value_max_bytes`), so SQL cannot adjudicate it. Aggregate Insights output is
+  normalized either way (`… where name like $1`); raw text would only appear on the
+  notable-query detail path. Confirm with support before the first real user row lands —
+  PlanetScale warns raw collection "may result in sensitive data … being sent to PlanetScale,"
+  which matters under ADR-0005's residency posture. A privacy question, not a performance one.
 - **`pginsights.normalize_schema_names` → `false`.** It exists for schema-per-tenant designs.
   We are database-per-app, so normalizing would collapse the distinction we want visible.
 - **`track_io_timing` → off.** Required for the `% of I/O` and `I/O time` columns, but the
