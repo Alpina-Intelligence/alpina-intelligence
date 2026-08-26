@@ -217,10 +217,14 @@ Revisit only for SQL-native alerting that the MCP server below cannot cover.
 
 ### Insights settings that stay off
 
-- **`pginsights.raw_queries` → `false`.** Enabling it collects query text *with literals*;
-  PlanetScale's own note warns this "may result in sensitive data … being sent to
-  PlanetScale." Normalized patterns carry no user data, raw literals could. This is a
-  privacy decision consistent with ADR-0005's residency posture, not a performance one.
+- **`raw_queries` → should be `false`, but is currently `true`.** The API reports
+  `insights_raw_queries: true` on this database (`planetscale_list_databases`), so full query
+  text *including literals* is being collected for notable queries. PlanetScale's own note
+  warns this "may result in sensitive data … being sent to PlanetScale." Aggregate views stay
+  normalized (`… where name like $1`), so this only bites on the notable-query detail path —
+  but it is exactly the wrong default under ADR-0005's residency posture. **Turn it off**:
+  *Clusters → Branch → Extensions → pginsights*. Harmless today because no user data exists;
+  fix before the first real row lands. A privacy decision, not a performance one.
 - **`pginsights.normalize_schema_names` → `false`.** It exists for schema-per-tenant designs.
   We are database-per-app, so normalizing would collapse the distinction we want visible.
 - **`track_io_timing` → off.** Required for the `% of I/O` and `I/O time` columns, but the

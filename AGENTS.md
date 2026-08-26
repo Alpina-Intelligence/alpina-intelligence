@@ -173,8 +173,10 @@ always-on daemons, reachable only via `:22`.
     `planetscale_execute_write_query`, running on ephemeral credentials minted on demand —
     not as `<db>_svc` — so it would bypass both the role split and `pg_strict`. Real SQL
     goes through `psql` with `PLANETSCALE_ADMIN_URL`.
-  - Keep `pginsights.raw_queries` **false**: it collects literals, which PlanetScale warns
-    may send sensitive data off-platform. A privacy decision, not a performance one.
+  - `raw_queries` should be **false** but the API currently reports
+    `insights_raw_queries: true` — literals are being collected for notable queries. Turn it
+    off (*Clusters → Branch → Extensions → pginsights*) before real data lands; PlanetScale
+    warns it may send sensitive data off-platform. A privacy decision, not a performance one.
   - `CONNECT` on the `postgres` maintenance DB is **deliberately left open** — `datacl` is
     NULL, so every `pscale_*` role rides the implicit PUBLIC grant and a pooler fronts 5432.
 

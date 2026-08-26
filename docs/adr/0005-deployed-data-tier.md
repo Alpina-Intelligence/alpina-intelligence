@@ -239,6 +239,12 @@ Revisit if a cached binding is ever added.
 - **Whether Cloudflare credits apply to PlanetScale.** Claimed in Cloudflare's
   [launch blog](https://blog.cloudflare.com/deploy-planetscale-postgres-with-workers/) but
   **absent from the docs and changelog**. Treat as unverified.
+
+  **Cloudflare *billing* is confirmed, though** (2026-08-25, primary source): the PlanetScale
+  API reports `cloudflare_billed: true` and a `cloudflare_uid` matching this account's
+  Cloudflare account id, alongside `region: AWS ca-central-1 (Montreal)` and
+  `insights_enabled: true`. Decision 1 and the placement decision are therefore verified
+  against the platform, not just the marketing page. Credits remain the only unverified half.
 - **The stored URL is libpq-shaped, and postgres-js cannot read it.** postgres-js parses
   URLs itself and forwards unknown query params as Postgres *runtime* parameters, so
   `?sslrootcert=system` becomes `SET sslrootcert` → `42704 unrecognized configuration
