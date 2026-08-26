@@ -4,10 +4,103 @@ Deployed counterpart to [`infra/postgres/`](../postgres/) (local + legacy box). 
 their reasoning live in [ADR-0004](../../docs/adr/0004-managed-postgres.md) and
 [ADR-0005](../../docs/adr/0005-deployed-data-tier.md) — this file is the runbook only.
 
-Nothing here is automated yet. Every step below is hand-run, and the whole file is a
-candidate for a `just` recipe once a justfile exists.
+**This is a transplantable procedure, not just notes on our cluster.** The section below
+builds a Cloudflare-billed PlanetScale Postgres tier from nothing; everything after it is
+reference for the cluster we already run. Two steps genuinely require a browser; the rest
+is scripted.
 
-## The cluster
+## Zero to running
+
+### What is scriptable and what is not
+
+| Step | How |
+| --- | --- |
+| Mint the first service token | **browser** (or one interactive `pscale auth login`) |
+| Create the Cloudflare-billed database | `wrangler` + `pscale` |
+| Database settings (residency, deletion, raw queries) | `PATCH` API |
+| Roles + permissions + **`pg_strict`** | `POST` API — [`provision-db.sh`](provision-db.sh) |
+| Logical database, `REVOKE CONNECT`, grants | `psql` — same script |
+| Hyperdrive config + binding | `wrangler` |
+| `pg_strict` on an **already-created** role | **browser** — no documented `PATCH` |
+
+Only those two rows need a human in a browser. Everything else is a command, which is what
+makes this repeatable for a new client or a new app.
+
+### 0. Prerequisites
+
+```bash
+brew install pscale                      # or .deb/.rpm from github.com/planetscale/cli
+pscale auth login                        # one time, browser — only to mint the token below
+pscale service-token create              # note the ID and secret; the secret is shown once
+```
+
+The token needs org `create_databases` plus, on the database, `write_database`,
+`create_branch`, `read_branch`, `create_production_branch_password` and
+`delete_branch_password`. Then, for every command that follows:
+
+```bash
+export PLANETSCALE_SERVICE_TOKEN_ID=…    # never in a shell that logs history
+export PLANETSCALE_SERVICE_TOKEN=…
+export PLANETSCALE_ORG=<org>
+```
+
+### 1. Create the cluster, billed to Cloudflare
+
+The signature is what attaches billing to the Cloudflare account; the database itself is
+created through PlanetScale. Requires `pscale` ≥ 0.313.0, and the `wrangler` subcommand is
+flagged experimental.
+
+```bash
+bunx wrangler hyperdrive planetscale signature \
+  | pscale database create <cluster> --org "$PLANETSCALE_ORG" \
+      --engine postgresql --region <region-slug> --major-version 18 \
+      --cloudflare-billing @- --format json
+```
+
+Discover valid values rather than hard-coding them — SKUs and regions change:
+`GET /v1/organizations/{org}/cluster-size-skus` and `list_regions_for_organization`.
+Region is **immutable after creation**; choose deliberately (ADR-0005 §4).
+
+### 2. Lock the cluster down before it holds anything
+
+One `PATCH` covers all three. Do it now: the first two are cheap here and expensive later,
+and the third is a privacy setting you do not want to discover is on.
+
+```bash
+curl -sS -X PATCH \
+  "https://api.planetscale.com/v1/organizations/$PLANETSCALE_ORG/databases/<cluster>" \
+  -H "Authorization: ${PLANETSCALE_SERVICE_TOKEN_ID}:${PLANETSCALE_SERVICE_TOKEN}" \
+  -H 'Content-Type: application/json' \
+  --data '{"restrict_branch_region":true,"deletion_protected":true,"insights_raw_queries":false}'
+```
+
+- `restrict_branch_region` pins new branches to the default branch's region. Branch regions
+  are fixed at creation, so without this one wrong click is permanent.
+- `deletion_protected` on the database. The `pscale` CLI has **no** `--deletion-protected`
+  flag for databases — only for branches — so this is API-only.
+- `insights_raw_queries` false keeps query *literals* off PlanetScale's pipeline.
+
+### 3. Per app: one logical database and two roles
+
+```bash
+export PLANETSCALE_CLUSTER=<cluster>
+export PLANETSCALE_ADMIN_URL="postgresql://postgres.<branch-id>:…@<host>:5432/postgres?sslmode=verify-full&sslrootcert=system"
+
+./provision-db.sh <app> --bws-project <bitwarden-project-uuid>
+```
+
+That creates both roles with query safety set **at creation** (the only programmatic path —
+see *Extensions and query safety*), creates the logical database, revokes `CONNECT` from
+`PUBLIC`, applies the grants, asserts the privilege boundary, and stores both connection
+URLs in Bitwarden. Re-runnable for the database and grants; role creation is not idempotent,
+so a second run mints new roles.
+
+### 4. Hyperdrive
+
+See [Hyperdrive](#hyperdrive) below — `wrangler hyperdrive create … --caching-disabled`,
+then the binding, then `wrangler types`.
+
+## Reference: the cluster we run
 
 | | |
 | --- | --- |
@@ -52,11 +145,16 @@ shells must redefine it as above. Prefer passing the URL through an environment 
 One admin URL covers the whole cluster — libpq lets later options win, so
 `psql "$ADMIN_URL" -d www` reaches another logical database without a second secret.
 
-## Provisioning a new app database
+## Provisioning a new app database, by hand
 
-Replace `www` with the app directory name. **Create the two roles on the platform first**
-(dashboard → *Settings → Roles*, or `pscale role create alpina-intelligence main www_svc`)
-so their role-ids exist for the grants:
+> [`provision-db.sh`](provision-db.sh) does all of this. Keep this section as the
+> explanation of *what* it does and the path to follow when something fails midway — but
+> change the script when the procedure changes, or the two will drift.
+
+Replace `www` with the app directory name. **Create the two roles first** so their role-ids
+exist for the grants — dashboard (*Settings → Roles*), `pscale role create <cluster> main
+www_svc --inherited-roles pg_read_all_data,pg_write_all_data`, or the create_role API. Note
+the CLI cannot set query safety; only the API and the dashboard can:
 
 | Role | Checkboxes | `pg_strict` | Destination |
 | --- | --- | --- | --- |
