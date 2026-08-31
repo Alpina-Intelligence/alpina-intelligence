@@ -63,8 +63,8 @@ Region is **immutable after creation**; choose deliberately (ADR-0005 §4).
 
 ### 2. Lock the cluster down before it holds anything
 
-One `PATCH` covers all three. Do it now: the first two are cheap here and expensive later,
-and the third is a privacy setting you do not want to discover is on.
+One `PATCH` covers three cluster settings; branch deletion protection is a *fourth* and
+needs its own `pscale` call (see bullets). Cheap now, expensive or private later.
 
 ```bash
 curl -sS -X PATCH \
@@ -76,11 +76,18 @@ curl -sS -X PATCH \
 
 - `restrict_branch_region` pins new branches to the default branch's region. Branch regions
   are fixed at creation, so without this one wrong click is permanent.
-- `deletion_protected` on the database. The `pscale` CLI has **no** `--deletion-protected`
-  flag for databases — only for branches — so this is API-only. The two scopes are
-  independent: the dashboard branch page has a separate **Prevent branch deletion** toggle,
-  still **off** for `main` (2026-08-30) even while the database-level flag is on.
-- `insights_raw_queries` false keeps query *literals* off PlanetScale's pipeline.
+- **Two deletion scopes, set both.** The *database*-level `deletion_protected` is API-only —
+  the `pscale` CLI has no database flag. The *branch* scope is the gap that bites:
+  ```bash
+  pscale branch update <cluster> main --deletion-protected --org "$PLANETSCALE_ORG"
+  pscale api organizations/$PLANETSCALE_ORG/databases/<cluster>/branches/main \
+    | jq .deletion_protected   # true — note: `pscale branch show` OMITS this field for postgres
+  ```
+  (path without the `v1` prefix; `pscale api` adds it). Verified on `main` 2026-08-31.
+- `insights_raw_queries` false keeps query *literals* off PlanetScale's pipeline — and it
+  is the *database object* that misreports `true`; the real setting is cluster-scoped, read
+  it with `pscale branch extensions list … | jq '.[] | select(.name=="pginsights")'` →
+  `pginsights.raw_queries → value: "off"`.
 
 ### 3. Per app: one logical database and two roles
 
