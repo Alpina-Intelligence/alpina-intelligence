@@ -77,7 +77,9 @@ curl -sS -X PATCH \
 - `restrict_branch_region` pins new branches to the default branch's region. Branch regions
   are fixed at creation, so without this one wrong click is permanent.
 - `deletion_protected` on the database. The `pscale` CLI has **no** `--deletion-protected`
-  flag for databases — only for branches — so this is API-only.
+  flag for databases — only for branches — so this is API-only. The two scopes are
+  independent: the dashboard branch page has a separate **Prevent branch deletion** toggle,
+  still **off** for `main` (2026-08-30) even while the database-level flag is on.
 - `insights_raw_queries` false keeps query *literals* off PlanetScale's pipeline.
 
 ### 3. Per app: one logical database and two roles
@@ -328,18 +330,41 @@ automatically (2026-08-25 22:54 UTC) when the per-role Query safety setting was 
 original instinct that a preload was required was right; the wrong part was assuming a human
 had to arrange it.
 
+### Extension state audit (2026-08-30, pscale 0.328.0)
+
+Three facts the catalogs hide unless you know to look:
+
+- **`pg_available_extensions` lists *installable*, not *installed*.** Real state
+  (`pg_extension`) on 18.6: `plpgsql`, `hypopg` (platform machinery) and `pg_strict`
+  (per-DB — present in `www`, absent in `postgres`). Nothing else.
+- **`pgextwlist` filters that same view.** `extwlist.pscale_allowed_extensions` allows
+  `vector, vectorscale, postgis, pg_cron, …`, but allow-listed extensions stay *absent*
+  from `pg_available_extensions` until loaded — so "pgvector isn't in the image" was a
+  false reading. Absence there is never proof of unavailability.
+- **`vector` needs no restart.** `CREATE EXTENSION vector` → 0.8.5 installed and dropped
+  cleanly as admin on the `postgres` maintenance DB (2026-08-30). The
+  `shared_preload_libraries` "loader" in `pscale branch extensions list` describes where
+  its `hnsw.*/ivfflat.*` GUCs live, not a creation gate. Genuinely preload-gated names are
+  configured via `pscale branch resize --parameters pgconf.shared_preload_libraries=…`
+  (restart; a `--parameters` change is a queued change request — check
+  `pscale branch resize status`); there is **no** `pscale branch extensions enable`.
+
+Enabling vector for a real workload = one `CREATE EXTENSION vector` as **admin** in that
+logical database. Whether `<db>_migrator` may do it is untested; assume not until a
+migration actually needs it.
+
 ### Insights settings
 
-- **`raw_queries` — two controls, and they disagree.** The branch-scoped extension parameter
-  (*Clusters → Branch → Extensions → pginsights*, the one the docs name, default `false`)
-  reads **off** in the dashboard. The database object returned by `planetscale_list_databases`
-  reports `insights_raw_queries: **true**`. Which governs is **unresolved**: there is no
-  `pginsights.raw_queries` GUC in the database (`pg_settings` exposes only
-  `pginsights.tag_value_max_bytes`), so SQL cannot adjudicate it. Aggregate Insights output is
-  normalized either way (`… where name like $1`); raw text would only appear on the
-  notable-query detail path. Confirm with support before the first real user row lands —
-  PlanetScale warns raw collection "may result in sensitive data … being sent to PlanetScale,"
-  which matters under ADR-0005's residency posture. A privacy question, not a performance one.
+- **`raw_queries` — resolved: `off`** (2026-08-30, no support ticket needed).
+  `pscale branch extensions list alpina-intelligence main --format json` returns the
+  `pginsights` record with its cluster setting **`pginsights.raw_queries` → `value:
+  "off"`** (default; not restart-gated). That is the control-plane truth the dashboard's
+  *Clusters → Branch → Extensions → pginsights* page reads, and it is why the GUC lookup
+  found nothing: it is set cluster-side, not in-database. The database object's
+  `insights_raw_queries: true` is a **reporting artifact**, not behavior. Query literals
+  are not leaving the platform. Aggregate Insights output is normalized either way
+  (`… where name like $1`). Re-check the *setting value* — never the object flag — after
+  any platform migration or resize.
 - **`pginsights.normalize_schema_names` → `false`.** It exists for schema-per-tenant designs.
   We are database-per-app, so normalizing would collapse the distinction we want visible.
 - **`track_io_timing` → off.** Required for the `% of I/O` and `I/O time` columns, but the

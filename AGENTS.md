@@ -161,27 +161,33 @@ always-on daemons, reachable only via `:22`.
     Extensions-tab item, and **SQL cannot set it** (needs `ADMIN OPTION` / superuser, which
     the Default role lacks). It is **invisible to `pg_db_role_setting`** — audit by
     connecting as the role and reading `current_setting('pg_strict.…', true)`.
-  - Restart-gated extensions (`pg_stat_statements`, `pg_duckdb`, `timescaledb`, `pg_cron`)
-    live under *Clusters → Branch → Extensions → Queue → Apply* and can **only** be enabled
-    there. `pgvector` needs no restart.
+  - Preload-gated extensions (`pg_stat_statements`, `pg_duckdb`, `timescaledb`, `pg_cron`)
+    are configured via the cluster's preload list — dashboard *Clusters → Branch →
+    Extensions* or `pscale branch resize --parameters pgconf.shared_preload_libraries=…`.
+    `pscale branch extensions list` is catalog-only; there is no CLI "enable". `pgvector`
+    is **not** gated: `CREATE EXTENSION vector` (0.8.5) works immediately as admin.
   - **Query observability is Insights, NOT `pg_stat_statements`** — deliberate, see
     `infra/planetscale/README.md`. Insights is always on and gives percentiles, 7 days of
     history, full-table-scan flags and per-index usage; `pg_stat_statements` gives none of
-    those and costs a restart plus resident memory on the 512 MiB instance.
+    those — and while exposing its view is now free (it is preloaded; see below), it adds
+    nothing over Insights.
   - `.mcp.json` registers the **insights-only** MCP server
     (`…/mcp/planetscale-insights-only`). **Never** the full `…/mcp/planetscale`: it ships
     `planetscale_execute_write_query`, running on ephemeral credentials minted on demand —
     not as `<db>_svc` — so it would bypass both the role split and `pg_strict`. Real SQL
     goes through `psql` with `PLANETSCALE_ADMIN_URL`.
-  - `raw_queries`: **two controls that disagree.** The extension parameter (*Clusters →
-    Branch → Extensions → pginsights*, default `false`) reads off in the dashboard; the
-    database object reports `insights_raw_queries: true`. No `pginsights.raw_queries` GUC
-    exists, so SQL cannot adjudicate. Unresolved — confirm with support before real user
-    data lands, since raw collection sends literals off-platform.
+  - `raw_queries`: **resolved: off** (2026-08-30). `pscale branch extensions list` exposes
+    the `pginsights.raw_queries` cluster setting, `value: off` — the control-plane truth.
+    The database object's `insights_raw_queries: true` is a misreported flag. Literals do
+    not leave the platform; no support ticket needed.
   - `pg_stat_statements` is **preloaded by the platform** (Insights is built on it) but not
     `CREATE EXTENSION`-ed anywhere. So exposing the view costs **no restart and no extra
     memory** — the earlier "too expensive" reasoning was wrong. It stays uninstalled because
     Insights already answers the same questions better, not because of cost.
+  - **`pg_available_extensions` is the *installable* list — and `pgextwlist` filters it.**
+    Allow-listed extensions (incl. `vector`) are absent from it until loaded; absence is
+    not proof of unavailability. Audit real state with `pg_extension`: only `plpgsql`,
+    `hypopg` and `pg_strict` (per-DB) are installed.
   - `CONNECT` on the `postgres` maintenance DB is **deliberately left open** — `datacl` is
     NULL, so every `pscale_*` role rides the implicit PUBLIC grant and a pooler fronts 5432.
 
