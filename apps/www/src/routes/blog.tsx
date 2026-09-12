@@ -77,6 +77,10 @@ const dateFmt = new Intl.DateTimeFormat("en", {
 	year: "numeric",
 	month: "short",
 	day: "numeric",
+	// Post dates are date-only ISO strings, which `new Date()` parses as UTC
+	// midnight. Pin formatting to UTC so SSR (workerd, TZ=UTC) and client
+	// hydration agree, and so visitors west of UTC don't see the previous day.
+	timeZone: "UTC",
 });
 
 function PostMeta({ date, minutes }: { date: string; minutes: number }) {
