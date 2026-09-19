@@ -1,6 +1,7 @@
 # ADR-0004: Deployed Postgres is managed (PlanetScale via Hyperdrive); the VPS becomes a daemon host
 
-- **Status:** Accepted, 2026-08-13
+- **Status:** Accepted, 2026-08-13. Decision §2 (the VPS as always-on daemon host) is
+  **superseded by [ADR-0006](0006-vps-retired.md)** (2026-09-19) — the VPS is retired.
 - **Depends on:** ADR-0001, ADR-0002, ADR-0003.
 - **Supersedes:** `docs/architecture.md` §4–6 *for deployed databases* — Postgres placement
   ("shared, and outside the cluster") now describes the local stack and the legacy box

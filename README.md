@@ -1,8 +1,9 @@
 # Alpina Intelligence — monorepo
 
 All projects in one repo: the shared infrastructure substrate, the apps that run on it,
-and the libraries they share. HTTP apps deploy to Cloudflare Workers against managed
-Postgres; a legacy Hetzner VPS is retained for always-on daemons, reachable only on `:22`.
+and the libraries they share. HTTP apps deploy to Cloudflare Workers against
+Cloudflare-billed PlanetScale Postgres; there is no VPS (ADR-0006) and always-on compute
+is Cloudflare's to provide.
 
 This lineage is a **deliberate restart**: the previous stack (the "UIP" monorepo — a Bun
 workspace with every app, one big `docker-compose.yml`, and five deploy workflows) was
@@ -13,7 +14,7 @@ out of that tag into the layout below one at a time.
 ## Layout
 
 ```
-infra/         # substrate: local postgres, planetscale (deployed), host, terraform (planned)
+infra/         # substrate: local postgres, planetscale (deployed), terraform (planned)
 apps/          # deployable units, ANY language — each owns its wrangler.jsonc (ADR-0003)
 packages-ts/   # shared TypeScript, consumed as source (Bun workspace)
 packages-py/   # shared Python, alpina.* namespace (uv workspace) — created on first need
@@ -32,25 +33,26 @@ change — lives in `infra/`. Each app owns everything specific to itself:
 | Concern | Owner |
 | --- | --- |
 | Local dev Postgres — container, version, provisioning | **`infra/`** |
-| The legacy VPS — host policy, the retained Postgres | **`infra/`** |
+| Deployed data tier — PlanetScale cluster, Hyperdrive configs | **`infra/planetscale/`** runbook |
 | Cloudflare DNS, Access — via Terraform | **`infra/`** (planned) |
 | An app's worker config, routes, schema, migrations, seed data | **`apps/<name>/`** |
 
-The load-bearing rule: **the Postgres superuser password never leaves the substrate
-tier.** It was never repo membership that enforced this — it's credential scoping: the
-password lives in Bitwarden and on the host, `provision-db.sh` is run by hand, and no
-app or CI environment ever holds it ([ADR-0001](docs/adr/0001-monorepo.md)).
+The load-bearing rule: **the deployed Postgres superuser password never leaves the
+substrate tier.** It was never repo membership that enforced this — it's credential
+scoping: the admin URL lives in Bitwarden, real SQL goes through `psql`, the MCP server is
+insights-only, and no app or CI environment ever holds it
+([ADR-0001](docs/adr/0001-monorepo.md), [ADR-0005](docs/adr/0005-deployed-data-tier.md)).
 
-Adding an app is now one directory (ADR-0003) and, since deployed Postgres is managed
-(ADR-0004), needs no `infra/` touch at all. The `infra/` PR is a local-tier concern.
+Adding an app is one directory (ADR-0003) and no `infra/` touch at all: deployed Postgres
+is one shared cluster holding many logical databases (ADR-0004, ADR-0005). The `infra/`
+PR is a local-tier concern.
 
 ```mermaid
 flowchart LR
     subgraph repo["alpina-intelligence (this repo)"]
         subgraph plat["infra/ — substrate"]
             loc["local/<br/>dev Postgres :5434"]
-            pg["postgres/<br/>legacy box, local-only script"]
-            host["host/<br/>patch + reboot policy"]
+            ps["planetscale/<br/>provisioning runbook"]
         end
         subgraph apps["apps/ — one directory per deployable"]
             www["www/<br/>+ wrangler.jsonc"]
@@ -65,13 +67,14 @@ flowchart LR
 - **`apps/www`** is live on Cloudflare Workers ([ADR-0003](docs/adr/0003-workers-deploy.md)),
   behind a Cloudflare Access gate until launch. Deploy is `bun run deploy` from the app
   directory; ingress is `routes` in its `wrangler.jsonc`.
-- **Deployed Postgres is PlanetScale over Hyperdrive**
-  ([ADR-0004](docs/adr/0004-managed-postgres.md)) — wiring pending a PlanetScale account.
+- **Deployed Postgres is one PlanetScale cluster over Hyperdrive** ([ADR-0004],
+  [ADR-0005](docs/adr/0005-deployed-data-tier.md)) — `apps/www` is wired to it; runbook in
+  [`infra/planetscale/`](infra/planetscale/).
 - **Local dev Postgres** runs on `127.0.0.1:5434` — see [`infra/local/`](infra/local/).
-- **Deprecated and shelved:** k3s, `cloudflared` HTTP ingress, GHCR image builds, Flux,
-  and `infra/sm-operator/`. Kept for history, marked in place, not live.
-- **The legacy VPS** runs Postgres and SSH only. Never rescale or rebuild it — it holds a
-  grandfathered price that any of those actions forfeits (ADR-0004).
+- **The VPS is retired** ([ADR-0006](docs/adr/0006-vps-retired.md)); its infra directories
+  are gone and always-on compute belongs to Cloudflare. The pre-Workers stack remains as
+  history: `docs/reference/uip-infra/` (UIP) and the superseded sections of
+  [`docs/architecture.md`](docs/architecture.md).
 - **Not built yet:** `infra/terraform/`, `packages-ts/`, `packages-py/`.
 
 ## Where the ADRs are

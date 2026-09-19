@@ -1,9 +1,10 @@
 # Platform architecture
 
 The shared substrate: Cloudflare's edge, where HTTP apps deploy as Workers (ADR-0003)
-against managed Postgres (ADR-0004), plus a legacy Hetzner VPS retained for always-on
-daemons. Every project depends on what's described here; nothing here depends on any
-particular project.
+against one PlanetScale Postgres cluster billed through Cloudflare (ADR-0004, ADR-0005).
+There is no VPS — it is retired by ADR-0006 (2026-09-19), and always-on compute belongs
+to Cloudflare. Every project depends on what's described here; nothing here depends on
+any particular project.
 
 > Status: **living doc, partially superseded.** §2–3 (tunnel/Traefik/k3s ingress) and
 > the k3s/Flux deploy mechanism describe the pre-Workers design — **superseded by
@@ -17,7 +18,10 @@ particular project.
 > Cloudflare-billed PlanetScale cluster holding many logical databases in `ca-central-1`, and
 > §7's implied direction of travel toward Cloudflare's own secret stores is closed off — they
 > are write-only and Workers-only, so Bitwarden remains the vault of record now that compute
-> spans two vendors.
+> spans two vendors. **ADR-0006** (2026-09-19) retires the VPS entirely — its artifacts are
+> deleted from `infra/` — so §2–5 and §7's in-cluster machinery, and §8's "what the box
+> buys", stand as history only. The live substrate is §1 (boundaries), §6 (Terraform,
+> when built), and the ADR-0005 data tier.
 
 ## 1. One repo, one boundary
 
@@ -139,7 +143,7 @@ after it — `cloudflared` → Traefik → pod — is plaintext over loopback an
 network. Fine on a single node, and another reason the firewall's default-deny is load
 bearing rather than belt-and-braces.
 
-Connector details and the runbook: [`infra/cloudflared/`](../infra/cloudflared/).
+Connector details and the runbook: `infra/cloudflared/` (deleted with the VPS — ADR-0006).
 
 ## 4. Orchestration — k3s
 
@@ -193,7 +197,7 @@ one project leaking pool connections would otherwise starve the rest.
 What it deliberately does *not* do: hide project names. Any role can read `pg_database`
 and `pg_roles`. Fine when one person owns everything; not a tenancy boundary.
 
-Details and runbook: [`infra/postgres/`](../infra/postgres/).
+Details and runbook: `infra/postgres/` (deleted with the VPS — ADR-0006).
 
 ## 6. Infra as code — Terraform + Cloudflare
 
@@ -261,7 +265,7 @@ app secret is stored in git in any form — not even encrypted.
 `sm-operator` runs in-cluster, authenticates with a Bitwarden machine account, and
 reconciles `BitwardenSecret` CRs into ordinary k8s Secrets on a 300s timer. Deployment
 manifests reference those by `secretKeyRef` and never know Bitwarden exists. Runbook:
-`infra/sm-operator/README.md`.
+`infra/sm-operator/README.md` (deleted with the VPS — ADR-0006).
 
 ```mermaid
 flowchart LR

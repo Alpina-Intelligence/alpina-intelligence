@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
 # Provision one logical database + its two roles on an existing PlanetScale
-# Postgres cluster. Deployed counterpart to infra/postgres/provision-db.sh.
+# Postgres cluster.
 #
 #   ./provision-db.sh <app> [--branch main] [--bws-project <uuid>]
 #

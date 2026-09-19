@@ -8,8 +8,7 @@
 # here can never wipe a neighbour's data.
 #
 # Version parity: postgres:18 tracks the DEPLOYED tier — PlanetScale Postgres
-# 18.x (ADR-0005) — NOT infra/postgres/ (the legacy box, demoted out of the prod
-# path by ADR-0004). Dev/deployed major-version drift is how migration surprises
+# 18.x (ADR-0005). Dev/deployed major-version drift is how migration surprises
 # ship. Exact parity is unattainable and not the goal: PlanetScale is aarch64 and
 # carries extensions no stock image has (pg_strict, timescaledb, vector,
 # pg_duckdb, hypopg, pg_partman). Notably pg_strict's unqualified-UPDATE/DELETE

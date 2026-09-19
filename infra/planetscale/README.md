@@ -1,7 +1,7 @@
 # PlanetScale Postgres — the deployed database tier
 
-Deployed counterpart to [`infra/postgres/`](../postgres/) (local + legacy box). Decisions and
-their reasoning live in [ADR-0004](../../docs/adr/0004-managed-postgres.md) and
+Deployed data tier. Decisions and their reasoning live in
+[ADR-0004](../../docs/adr/0004-managed-postgres.md) and
 [ADR-0005](../../docs/adr/0005-deployed-data-tier.md) — this file is the runbook only.
 
 **This is a transplantable procedure, not just notes on our cluster.** The section below

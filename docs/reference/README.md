@@ -15,9 +15,9 @@ that wasn't in version control, which is why it's copied in here rather than lef
 
 | File | What it did | Why it's interesting |
 | --- | --- | --- |
-| `ensure-databases.sql` | Idempotent `CREATE DATABASE` per project, re-run on every deploy | **Direct prior art** for `infra/postgres/provision-db.sh`. The `SELECT … WHERE NOT EXISTS \gexec` trick is borrowed from it verbatim. |
+| `ensure-databases.sql` | Idempotent `CREATE DATABASE` per project, re-run on every deploy | Prior art for database provisioning (the old box's `provision-db.sh` is gone with the VPS; the PlanetScale script borrows the `SELECT … WHERE NOT EXISTS \gexec` trick verbatim). |
 | `docker-compose.yml` | Every service — `db`, `mlflow`, and all four apps — in one file | Shows the coupling that pushed us to k3s: adding an app meant editing a file shared by every project. |
-| `bootstrap-vps.sh` | One-shot VPS setup, generated the superuser password | Same job as the install section of `infra/postgres/README.md`. |
+| `bootstrap-vps.sh` | One-shot VPS setup, generated the superuser password | The install runbook it seeded is gone with the VPS (ADR-0006); kept as archive. |
 | `README.md` | The old deploy model | Documents the SHA-pinned `<APP>_TAG` in `/opt/alpina/.env` rollback scheme. |
 
 ### The gap worth noting

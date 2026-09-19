@@ -1,6 +1,8 @@
 # ADR-0003: HTTP apps deploy to Cloudflare Workers; tunnel ingress deprecated
 
-- **Status:** Accepted, 2026-08-11 (`apps/www` live on Workers same day)
+- **Status:** Accepted, 2026-08-11 (`apps/www` live on Workers same day). The
+  "VPS keeps Postgres and SSH" retention clause is **superseded by
+  [ADR-0006](0006-vps-retired.md)** (2026-09-19) — the VPS is retired.
 - **Depends on:** ADR-0001, ADR-0002.
 - **Supersedes:** the k3s/Flux/Traefik ingress path of ADR-0001 and
   `docs/architecture.md` §2–3 *for HTTP apps*. The VPS remains the stateful
