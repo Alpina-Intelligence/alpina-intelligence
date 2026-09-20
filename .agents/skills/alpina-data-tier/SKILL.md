@@ -94,7 +94,11 @@ own copy**; skipping step 3 breaks the Worker.
 - **Account API token client-IP filters must pin the /64, never a /128.** IPv6 privacy
   extensions rotate the interface id, so a full address matches nothing days later: every
   call 401s while `/tokens/verify` still says `active` (verify doesn't enforce the filter).
-  Bit `CLOUDFLARE_ACCESS_TOKEN` on 2026-09-12; fix was `2604:3d09:1a8b:2700::/64`.
+  Bit `CLOUDFLARE_ACCESS_TOKEN` on 2026-09-12; fix was `2604:3d09:1a8b:2700::/64`. The
+  dashboard's "Add my IP" button inserts the current /128 — edit it down to the /64.
+  Tunnel visibility needs the account permission **Connectivity Directory: Read**
+  (Cloudflare Tunnel's permission group was renamed); token *edits* never regenerate the
+  secret — only Roll (or delete + recreate) does.
 
 ## Toolchain traps
 
